@@ -1,6 +1,12 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=220&section=header&text=PIXORA&fontSize=90&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=AI%20Text%2FImage%20%E2%86%92%203D%20%E2%86%92%20Live%20WebAR%2C%20in%20your%20browser&descAlignY=58&descSize=20" width="100%"/>
+<p align="center">
+  <img
+    src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=220&section=header&text=PIXORA&fontSize=90&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=AI%20Text%2FImage%20%E2%86%92%203D%20%E2%86%92%20Live%20WebAR%2C%20in%20your%20browser&descAlignY=58&descSize=20"
+    width="100%"
+    alt="PIXORA"
+  />
+</p>
 
 <a href="#"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=26&pause=1000&color=A855F7&center=true&vCenter=true&width=760&lines=Prompt+it.;Generate+it+in+3D.;Edit+it+in-browser.;Publish+it+to+WebAR.;This+is+Pixora." alt="Typing SVG" /></a>
 
