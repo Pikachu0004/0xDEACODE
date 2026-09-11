@@ -23,7 +23,7 @@ export async function createTripoImageTask(imageDataUrl: string, poly: 'low' | '
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');
 
-  const res = await apiFetch<TripoGenerateResponse>('/api/tripo/generate-from-image', {
+  const res = await apiFetch<TripoGenerateResponse>('/api/tripo/generate-image', {
     method: 'POST',
     token,
     body: JSON.stringify({
