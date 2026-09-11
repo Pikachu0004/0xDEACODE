@@ -1,0 +1,18 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "watchPatterns": [
+      "src/**",
+      "public/**",
+      "index.html",
+      "vite.config.ts",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "tsconfig.*.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "npm run preview"
+  }
+}

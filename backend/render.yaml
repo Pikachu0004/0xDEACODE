@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: visiarise-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: TRIPO_API_KEY
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: DEFAULT_SIGNUP_CREDITS
+        value: 100
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_INITIAL_CREDITS
+        value: 999999

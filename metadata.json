@@ -1,0 +1,5 @@
+{
+  "name": "VisiARise",
+  "description": "AI + AR Creation Platform. Create 3D models from prompts and view them in AR.",
+  "requestFramePermissions": ["camera"]
+}

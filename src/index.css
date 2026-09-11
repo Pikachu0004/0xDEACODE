@@ -1,0 +1,291 @@
+@import "tailwindcss" source(none);
+@source "./**/*.ts";
+@source "./**/*.tsx";
+
+/* Google Fonts load via <link> in index.html — @import url() here breaks PostCSS after Tailwind expands. */
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-mono: "Space Grotesk", monospace;
+
+  /* Monochrome + silver accent (professional) */
+  --color-brand-primary: #d4d4d8;
+  --color-brand-secondary: #71717a;
+  --color-brand-accent: #f4f4f5;
+  --color-brand-bg: #0a0a0b;
+  --color-brand-surface-light: #18181b;
+  --color-brand-surface-light-end: #27272a;
+  --color-brand-glow: rgba(255, 255, 255, 0.12);
+  --color-text-soft: rgba(255, 255, 255, 0.88);
+  --color-text-muted: rgba(255, 255, 255, 0.45);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+  }
+  to {
+    box-shadow: 0 0 22px rgba(255, 255, 255, 0.14);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+body {
+  @apply bg-brand-bg text-white selection:bg-white/20;
+  overflow-x: hidden;
+}
+
+.noise-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.045;
+  pointer-events: none;
+  background-image:
+    repeating-radial-gradient(circle at 17% 32%, rgba(255, 255, 255, 0.06) 0, transparent 8px),
+    repeating-linear-gradient(
+      125deg,
+      rgba(255, 255, 255, 0.04) 0,
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+}
+
+.light-streak {
+  position: fixed;
+  width: 100vw;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  z-index: 2;
+  pointer-events: none;
+  animation: streak 10s linear infinite;
+}
+
+@keyframes streak {
+  0% {
+    transform: translateY(-100vh);
+  }
+  100% {
+    transform: translateY(200vh);
+  }
+}
+
+.glass-pill {
+  @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-full;
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
+}
+
+.neon-edge-purple {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 0 20px rgba(255, 255, 255, 0.06),
+    inset 0 0 10px rgba(255, 255, 255, 0.04);
+}
+
+/* Primary CTA — silver / chrome */
+.btn-neon-purple {
+  @apply relative px-8 py-3 rounded-full font-bold transition-all duration-300 flex items-center justify-center gap-2 text-zinc-950;
+  background: linear-gradient(165deg, #f5f5f5 0%, #d4d4d8 35%, #a1a1aa 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.btn-neon-purple:hover {
+  transform: scale(1.02);
+  box-shadow:
+    0 6px 32px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  filter: brightness(1.04);
+}
+
+.btn-glass-white {
+  @apply px-8 py-3 rounded-lg font-bold backdrop-blur-md bg-white/5 border border-white/10 hover:bg-white/10 transition-all;
+}
+
+.text-blur-reveal span {
+  display: inline-block;
+  filter: blur(10px);
+  opacity: 0;
+  animation: blur-reveal 0.8s forwards;
+}
+
+@keyframes blur-reveal {
+  to {
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-zinc-200 via-white to-zinc-400;
+}
+
+/* Subtle professional shine on hero / key headlines (teal + neutral, not loud) */
+@keyframes text-shine-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.text-gradient-shine {
+  display: inline-block;
+  background: linear-gradient(
+    100deg,
+    #e4e4e7 0%,
+    #fafafa 22%,
+    #99f6e4 42%,
+    #fafafa 58%,
+    #d4d4d8 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shine-shift 7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-gradient-shine {
+    animation: none;
+    background: linear-gradient(100deg, #e4e4e7 0%, #fafafa 50%, #d4d4d8 100%);
+    background-size: 100% auto;
+  }
+}
+
+.hero-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Hero horizontal deck — progress dots (updated via classList in GSAP) */
+.hero-scroll-dot {
+  height: 4px;
+  border-radius: 9999px;
+  width: 10px;
+  background: rgba(255, 255, 255, 0.28);
+  transition:
+    width 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.35s ease,
+    opacity 0.35s ease;
+}
+.hero-scroll-dot.is-active {
+  width: 32px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+/* Ardya demo: very light glass — hero video visible; blur keeps UI readable */
+.demo-ardya-glass {
+  --demo-glass-tint: rgba(0, 0, 0, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028) 0%, transparent 48%),
+    linear-gradient(165deg, rgba(24, 24, 27, 0.18) 0%, rgba(0, 0, 0, 0.16) 100%),
+    var(--demo-glass-tint);
+  backdrop-filter: blur(48px) saturate(0.92);
+  -webkit-backdrop-filter: blur(48px) saturate(0.92);
+  box-shadow:
+    0 20px 64px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+
+.demo-ardya-glass__header,
+.demo-ardya-glass__footer {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(28px) saturate(0.94);
+  -webkit-backdrop-filter: blur(28px) saturate(0.94);
+}
+
+.demo-ardya-glass__stage {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.2) 100%);
+}
+
+/* Hook for custom logo animation (Lottie / SVG / GSAP) */
+.hero-brand-logo {
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-brand-logo {
+    will-change: auto;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-brand-bg;
+}
+
+.section-surface-light {
+  position: relative;
+  color: #fafafa;
+  background: linear-gradient(
+    165deg,
+    var(--color-brand-surface-light) 0%,
+    #27272a 42%,
+    var(--color-brand-surface-light-end) 100%
+  );
+  overflow: hidden;
+}
+
+.section-surface-light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 45%,
+    transparent 70%
+  );
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.section-surface-dark {
+  @apply bg-brand-bg text-white;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+}
