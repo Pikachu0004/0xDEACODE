@@ -4,7 +4,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { apiUrl } from './api';
 
-const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai|.*\.amazonaws\.com|.*\.cloudfront\.net)\//i;
+const EXTERNAL_CDN = /^https?:\/\/(?!localhost|127\.0\.0\.1)/i;
 
 export function loadGltf(url: string): Promise<THREE.Group> {
   if (url.startsWith('blob:')) {

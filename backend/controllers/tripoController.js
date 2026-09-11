@@ -323,13 +323,17 @@ exports.proxyAsset = async (req, res) => {
     return res.status(400).json({ message: 'URL is required' });
   }
 
-  // Basic SSRF protection — only allow known model hosting domains
-  const allowedDomains = ['assets.meshy.ai', 'tripo3d.ai', 'amazonaws.com', 'cloudfront.net'];
   try {
     const parsed = new URL(url);
-    const isAllowed = allowedDomains.some((d) => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`));
-    if (!isAllowed) {
-      return res.status(403).json({ message: 'URL domain not allowed for proxying' });
+    const hostname = parsed.hostname;
+    // Basic SSRF protection — block local network
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.')
+    ) {
+      return res.status(403).json({ message: 'Local network proxying forbidden' });
     }
   } catch (e) {
     return res.status(400).json({ message: 'Invalid URL format' });

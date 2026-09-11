@@ -1,6 +1,6 @@
 import { apiUrl, type ModelUrlsPayload } from './api';
 
-const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai|.*\.amazonaws\.com|.*\.cloudfront\.net)\//i;
+const EXTERNAL_CDN = /^https?:\/\/(?!localhost|127\.0\.0\.1)/i;
 
 function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
   const comma = dataUrl.indexOf(',');

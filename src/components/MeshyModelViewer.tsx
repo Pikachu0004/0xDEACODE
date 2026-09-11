@@ -4,7 +4,7 @@ import { apiUrl } from '../lib/api';
 
 const ModelViewer = 'model-viewer' as any;
 
-const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai|.*\.amazonaws\.com|.*\.cloudfront\.net)\//i;
+const EXTERNAL_CDN = /^https?:\/\/(?!localhost|127\.0\.0\.1)/i;
 
 type Props = {
   src: string;
