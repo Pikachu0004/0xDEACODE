@@ -324,7 +324,7 @@ exports.proxyAsset = async (req, res) => {
   }
 
   // Basic SSRF protection — only allow known model hosting domains
-  const allowedDomains = ['assets.meshy.ai', 'tripo3d.ai', 'amazonaws.com'];
+  const allowedDomains = ['assets.meshy.ai', 'tripo3d.ai', 'amazonaws.com', 'cloudfront.net'];
   try {
     const parsed = new URL(url);
     const isAllowed = allowedDomains.some((d) => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`));

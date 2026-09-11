@@ -19,7 +19,7 @@ import { apiFetch, apiUrl, type PublicShareResponse } from '../lib/api';
 const ModelViewer = 'model-viewer' as any;
 
 const DEFAULT_LOCAL_MODEL = '/Human_Avatar_Kishan_Nishad_model.glb';
-const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai.*)\//i;
+const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai|.*\.amazonaws\.com|.*\.cloudfront\.net)\//i;
 
 export default function ARViewer() {
   const { id } = useParams();
