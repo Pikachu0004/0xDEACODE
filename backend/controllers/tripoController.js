@@ -316,3 +316,38 @@ exports.deleteTask = async (req, res) => {
     res.status(500).json({ message: 'Failed to delete task', error: error.message });
   }
 };
+
+exports.proxyAsset = async (req, res) => {
+  const { url } = req.body;
+  if (!url) {
+    return res.status(400).json({ message: 'URL is required' });
+  }
+
+  // Basic SSRF protection — only allow known model hosting domains
+  const allowedDomains = ['assets.meshy.ai', 'tripo3d.ai', 'amazonaws.com'];
+  try {
+    const parsed = new URL(url);
+    const isAllowed = allowedDomains.some((d) => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`));
+    if (!isAllowed) {
+      return res.status(403).json({ message: 'URL domain not allowed for proxying' });
+    }
+  } catch (e) {
+    return res.status(400).json({ message: 'Invalid URL format' });
+  }
+
+  try {
+    const response = await axios({
+      method: 'GET',
+      url,
+      responseType: 'stream',
+    });
+    const contentType = response.headers['content-type'];
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    }
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('Proxy Asset Error:', error.message);
+    res.status(error.response?.status || 500).json({ message: 'Failed to fetch asset', error: error.message });
+  }
+};

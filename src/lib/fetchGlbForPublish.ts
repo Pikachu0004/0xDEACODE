@@ -1,6 +1,6 @@
 import { apiUrl, type ModelUrlsPayload } from './api';
 
-const MESHY_CDN = /^https:\/\/assets\.meshy\.ai\//i;
+const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai.*)\//i;
 
 function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
   const comma = dataUrl.indexOf(',');
@@ -49,9 +49,9 @@ export async function fetchGlbArrayBufferForPublish(params: {
       'This model uses a temporary browser link — open AR Studio, export, and publish, or regenerate the model.'
     );
   }
-  if (MESHY_CDN.test(url)) {
+  if (EXTERNAL_CDN.test(url)) {
     if (!token) throw new Error('Sign in to publish Meshy-hosted models.');
-    const res = await fetch(apiUrl('/api/meshy/proxy-asset'), {
+    const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

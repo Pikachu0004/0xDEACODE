@@ -7,6 +7,7 @@ const {
   getTaskStatus,
   getUserTasks,
   deleteTask,
+  proxyAsset,
 } = require('../controllers/tripoController');
 
 // All routes require authentication
@@ -35,5 +36,10 @@ router.get('/task/:taskId', getTaskStatus);
 // @desc    Delete a task
 // @access  Private
 router.delete('/task/:taskId', deleteTask);
+
+// @route   POST /api/tripo/proxy-asset
+// @desc    Proxy fetch 3D models to bypass CORS
+// @access  Private
+router.post('/proxy-asset', proxyAsset);
 
 module.exports = router;

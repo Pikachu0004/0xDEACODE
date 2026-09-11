@@ -4,7 +4,7 @@ import { apiUrl } from '../lib/api';
 
 const ModelViewer = 'model-viewer' as any;
 
-const MESHY_CDN = /^https:\/\/assets\.meshy\.ai\//i;
+const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai.*)\//i;
 
 type Props = {
   src: string;
@@ -14,7 +14,7 @@ type Props = {
 
 /**
  * Meshy GLB URLs are on assets.meshy.ai — blocked by CORS in the browser.
- * Proxies through `/api/meshy/proxy-asset` when signed in.
+ * Proxies through `/api/tripo/proxy-asset` when signed in.
  */
 export default function MeshyModelViewer({ src, token, className }: Props) {
   const [resolved, setResolved] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
       setResolved(null);
       return;
     }
-    if (!MESHY_CDN.test(src)) {
+    if (!EXTERNAL_CDN.test(src)) {
       setResolved(src);
       return;
     }
@@ -41,7 +41,7 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
 
     (async () => {
       try {
-        const res = await fetch(apiUrl('/api/meshy/proxy-asset'), {
+        const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

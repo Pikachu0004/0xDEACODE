@@ -19,7 +19,7 @@ import { apiFetch, apiUrl, type PublicShareResponse } from '../lib/api';
 const ModelViewer = 'model-viewer' as any;
 
 const DEFAULT_LOCAL_MODEL = '/Human_Avatar_Kishan_Nishad_model.glb';
-const MESHY_CDN = /^https:\/\/assets\.meshy\.ai\//i;
+const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai.*)\//i;
 
 export default function ARViewer() {
   const { id } = useParams();
@@ -97,13 +97,13 @@ export default function ARViewer() {
   /** Local / data URLs work immediately; Meshy CDN needs proxy + blob. */
   const directModelUrl = useMemo(() => {
     if (!rawModelUrl) return null;
-    return MESHY_CDN.test(rawModelUrl) ? null : rawModelUrl;
+    return EXTERNAL_CDN.test(rawModelUrl) ? null : rawModelUrl;
   }, [rawModelUrl]);
 
   /** Meshy `assets.meshy.ai` URLs are blocked by CORS — fetch via API and use a blob URL for `<model-viewer>`. */
   useEffect(() => {
     setMeshyLoadError(null);
-    if (!rawModelUrl || !MESHY_CDN.test(rawModelUrl)) {
+    if (!rawModelUrl || !EXTERNAL_CDN.test(rawModelUrl)) {
       setMeshyBlobUrl(null);
       return;
     }
@@ -121,7 +121,7 @@ export default function ARViewer() {
 
     (async () => {
       try {
-        const res = await fetch(apiUrl('/api/meshy/proxy-asset'), {
+        const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

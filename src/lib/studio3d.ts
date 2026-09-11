@@ -4,7 +4,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { apiUrl } from './api';
 
-const MESHY_CDN = /^https:\/\/assets\.meshy\.ai\//i;
+const EXTERNAL_CDN = /^https?:\/\/(assets\.meshy\.ai|.*\.tripo3d\.ai.*)\//i;
 
 export function loadGltf(url: string): Promise<THREE.Group> {
   if (url.startsWith('blob:')) {
@@ -53,13 +53,13 @@ export async function loadGltfMeshyWithAnimations(
   url: string,
   token: string | null | undefined
 ): Promise<GltfLoadResult> {
-  if (!MESHY_CDN.test(url)) {
+  if (!EXTERNAL_CDN.test(url)) {
     return loadGltfWithAnimations(url);
   }
   if (!token) {
     throw new Error('Sign in to load Meshy-hosted models (CDN is proxied by the server).');
   }
-  const res = await fetch(apiUrl('/api/meshy/proxy-asset'), {
+  const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
