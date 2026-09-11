@@ -50,12 +50,11 @@ export async function fetchGlbArrayBufferForPublish(params: {
     );
   }
   if (EXTERNAL_CDN.test(url)) {
-    if (!token) throw new Error('Sign in to publish Meshy-hosted models.');
+
     const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ url }),
     });

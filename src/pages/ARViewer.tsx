@@ -107,13 +107,7 @@ export default function ARViewer() {
       setMeshyBlobUrl(null);
       return;
     }
-    if (!user?.token) {
-      setMeshyBlobUrl(null);
-      setMeshyLoadError(
-        'This model is hosted on Meshy’s CDN. Open this page while signed in so we can load it through your account, or use “Publish AR” from AR Studio after export (embeds a local GLB).'
-      );
-      return;
-    }
+
 
     setMeshyLoading(true);
     let blobUrl: string | null = null;
@@ -125,7 +119,6 @@ export default function ARViewer() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${user.token}`,
           },
           body: JSON.stringify({ url: rawModelUrl }),
         });

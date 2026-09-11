@@ -30,11 +30,6 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
       setResolved(src);
       return;
     }
-    if (!token) {
-      setErr('Sign in to preview Meshy models (CDN requires server proxy).');
-      setResolved(null);
-      return;
-    }
 
     let blobUrl: string | null = null;
     let cancelled = false;
@@ -45,7 +40,6 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ url: src }),
         });

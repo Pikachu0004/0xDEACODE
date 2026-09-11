@@ -10,25 +10,31 @@ const {
   proxyAsset,
 } = require('../controllers/tripoController');
 
-// All routes require authentication
+// @route   POST /api/tripo/proxy-asset
+// @desc    Proxy fetch 3D models to bypass CORS (Public for AR preview)
+// @access  Public
+router.post('/proxy-asset', proxyAsset);
+
+// All routes below require authentication
 router.use(protect);
 
 // @route   POST /api/tripo/generate
-// @desc    Create a new 3D generation task (Tripo text-to-model)
+// @desc    Generate a 3D model from text prompt
 // @access  Private
 router.post('/generate', generate3DModel);
 
-// @route   POST /api/tripo/generate-from-image
-// @desc    Create a new 3D generation task (Tripo image-to-model)
-router.post('/generate-from-image', generateFromImage);
+// @route   POST /api/tripo/generate-image
+// @desc    Generate a 3D model from image
+// @access  Private
+router.post('/generate-image', generateFromImage);
 
 // @route   GET /api/tripo/tasks
-// @desc    Get all tasks for the authenticated user
+// @desc    Get all user tasks
 // @access  Private
 router.get('/tasks', getUserTasks);
 
 // @route   GET /api/tripo/task/:taskId
-// @desc    Get status of a specific task
+// @desc    Get task status
 // @access  Private
 router.get('/task/:taskId', getTaskStatus);
 
@@ -36,10 +42,5 @@ router.get('/task/:taskId', getTaskStatus);
 // @desc    Delete a task
 // @access  Private
 router.delete('/task/:taskId', deleteTask);
-
-// @route   POST /api/tripo/proxy-asset
-// @desc    Proxy fetch 3D models to bypass CORS
-// @access  Private
-router.post('/proxy-asset', proxyAsset);
 
 module.exports = router;

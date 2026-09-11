@@ -56,14 +56,11 @@ export async function loadGltfMeshyWithAnimations(
   if (!EXTERNAL_CDN.test(url)) {
     return loadGltfWithAnimations(url);
   }
-  if (!token) {
-    throw new Error('Sign in to load Meshy-hosted models (CDN is proxied by the server).');
-  }
+
   const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ url }),
   });
