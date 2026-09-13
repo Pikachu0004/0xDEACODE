@@ -10,6 +10,9 @@ import {
   centerObjectAtOrigin,
   exportObject3DToGlbArrayBuffer,
   exportObject3DToGlbDataUrl,
+  exportObject3DToObjDataUrl,
+  exportObject3DToStlDataUrl,
+  exportObject3DToPlyDataUrl,
   fitCameraToObject,
   loadGltfMeshyWithAnimations,
   loadGltfWithAnimations,
@@ -140,6 +143,8 @@ export default function Studio() {
   const [arPlanePreview, setArPlanePreview] = useState(false);
   const [shadowsEnabled, setShadowsEnabled] = useState(true);
   const [dirLightOn, setDirLightOn] = useState(true);
+  const [fogEnabled, setFogEnabled] = useState(false);
+  const [fogDensity, setFogDensity] = useState(0.05);
   const [physicsGravity, setPhysicsGravity] = useState(false);
   const [physicsCollision, setPhysicsCollision] = useState(false);
   const [animLoop, setAnimLoop] = useState(true);
@@ -451,6 +456,16 @@ export default function Studio() {
     a.intensity = 0.35 + lighting * 0.25;
     d.intensity = 0.45 + lighting * 0.55;
   }, [lighting, sceneEpoch]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (fogEnabled) {
+      scene.fog = new THREE.FogExp2(bgColor, fogDensity);
+    } else {
+      scene.fog = null;
+    }
+  }, [fogEnabled, fogDensity, bgColor]);
 
   useEffect(() => {
     if (transformControlsRef.current) {
@@ -892,6 +907,54 @@ export default function Studio() {
       a.download = `${(projectTitle || project?.name || 'scene').replace(/\s+/g, '-')}.glb`;
       a.click();
       showStatus('GLB downloaded');
+    } catch (e) {
+      console.error(e);
+      showStatus('Download failed');
+    }
+  };
+
+  const downloadMergedObj = async () => {
+    const root = contentRootRef.current;
+    if (!root || root.children.length === 0) return;
+    try {
+      const dataUrl = exportObject3DToObjDataUrl(root);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${(projectTitle || project?.name || 'scene').replace(/\s+/g, '-')}.obj`;
+      a.click();
+      showStatus('OBJ downloaded');
+    } catch (e) {
+      console.error(e);
+      showStatus('Download failed');
+    }
+  };
+
+  const downloadMergedStl = async () => {
+    const root = contentRootRef.current;
+    if (!root || root.children.length === 0) return;
+    try {
+      const dataUrl = exportObject3DToStlDataUrl(root);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${(projectTitle || project?.name || 'scene').replace(/\s+/g, '-')}.stl`;
+      a.click();
+      showStatus('STL downloaded');
+    } catch (e) {
+      console.error(e);
+      showStatus('Download failed');
+    }
+  };
+
+  const downloadMergedPly = async () => {
+    const root = contentRootRef.current;
+    if (!root || root.children.length === 0) return;
+    try {
+      const dataUrl = await exportObject3DToPlyDataUrl(root);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${(projectTitle || project?.name || 'scene').replace(/\s+/g, '-')}.ply`;
+      a.click();
+      showStatus('PLY downloaded');
     } catch (e) {
       console.error(e);
       showStatus('Download failed');
@@ -2095,6 +2158,30 @@ export default function Studio() {
                   />
                   Cast shadows
                 </label>
+                <div className="pt-2 mt-2 border-t border-white/10">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fogEnabled}
+                      onChange={(e) => setFogEnabled(e.target.checked)}
+                    />
+                    Scene Fog
+                  </label>
+                  {fogEnabled && (
+                    <label className="flex flex-col gap-0.5 mt-2">
+                      <span className="text-[9px] uppercase font-bold text-white/70">Fog Density</span>
+                      <input
+                        type="range"
+                        min={0.01}
+                        max={0.2}
+                        step={0.01}
+                        value={fogDensity}
+                        onChange={(e) => setFogDensity(parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </label>
+                  )}
+                </div>
                 <p className={themeMuted}>HDRIs load from the header sparkle button.</p>
                 <button
                   type="button"
@@ -2415,6 +2502,9 @@ export default function Studio() {
         uiTheme={uiTheme}
         meshyUrls={project?.modelUrls}
         onDownloadMergedGlb={downloadMergedGlb}
+        onDownloadMergedObj={downloadMergedObj}
+        onDownloadMergedStl={downloadMergedStl}
+        onDownloadMergedPly={downloadMergedPly}
         onScreenshot={captureScreenshot}
         onCopyShareLink={copyShareLink}
       />

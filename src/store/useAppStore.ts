@@ -66,6 +66,10 @@ export interface Project {
   studioExtras?: StudioExtraModel[];
   /** Latest Tripo task id for the primary model. */
   tripoTaskId?: string | null;
+  /** Legacy Meshy preview task id (if any) */
+  meshyPreviewTaskId?: string | null;
+  /** Legacy Meshy task id (if any) */
+  meshyTaskId?: string | null;
   /** Meshy export URLs (glb, fbx, usdz, …) for downloads in Studio / chat. */
   modelUrls?: ModelUrlsPayload | null;
   /** PNG/JPEG/WebP as data URL — shown as a plane “sticker” in scene */

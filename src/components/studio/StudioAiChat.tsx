@@ -121,14 +121,7 @@ export function StudioAiChat({ projectId, compact, themeMuted, themeInk, uiTheme
 
   const handleImageTo3D = async () => {
     if (!stagedImage || !projectId) return;
-    if (meshyMeshMode === 'texture_only') {
-      addChatMessage(projectId, {
-        id: `t-${Date.now()}`,
-        role: 'assistant',
-        content: 'Tripo creates complete models per task. Use Model or Textured mode to generate a new model.',
-      });
-      return;
-    }
+    // Tripo image-to-3D task
     setIsGenerating(true);
     setMeshyProgress(0);
     try {

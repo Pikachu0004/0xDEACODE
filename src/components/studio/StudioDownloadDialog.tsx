@@ -9,6 +9,9 @@ type Props = {
   uiTheme: 'dark' | 'light';
   meshyUrls?: ModelUrlsPayload;
   onDownloadMergedGlb: () => void;
+  onDownloadMergedObj: () => void;
+  onDownloadMergedStl: () => void;
+  onDownloadMergedPly: () => void;
   onScreenshot: () => void;
   onCopyShareLink: () => void;
 };
@@ -20,6 +23,9 @@ export function StudioDownloadDialog({
   uiTheme,
   meshyUrls,
   onDownloadMergedGlb,
+  onDownloadMergedObj,
+  onDownloadMergedStl,
+  onDownloadMergedPly,
   onScreenshot,
   onCopyShareLink,
 }: Props) {
@@ -54,6 +60,48 @@ export function StudioDownloadDialog({
             <div>
               <p className="font-bold">Merged scene (GLB)</p>
               <p className={`text-[11px] ${themeMuted}`}>Current AR Studio export — all layers combined.</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onDownloadMergedObj();
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl border border-white/10 hover:bg-white/5 text-left"
+          >
+            <FileDown className="w-5 h-5 shrink-0 text-brand-primary" />
+            <div>
+              <p className="font-bold">Wavefront OBJ</p>
+              <p className={`text-[11px] ${themeMuted}`}>Standard 3D format (.obj).</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onDownloadMergedStl();
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl border border-white/10 hover:bg-white/5 text-left"
+          >
+            <FileDown className="w-5 h-5 shrink-0 text-brand-primary" />
+            <div>
+              <p className="font-bold">Stereolithography STL</p>
+              <p className={`text-[11px] ${themeMuted}`}>Common format for 3D printing (.stl).</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onDownloadMergedPly();
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl border border-white/10 hover:bg-white/5 text-left"
+          >
+            <FileDown className="w-5 h-5 shrink-0 text-brand-primary" />
+            <div>
+              <p className="font-bold">Polygon File Format PLY</p>
+              <p className={`text-[11px] ${themeMuted}`}>Standard format for 3D scans (.ply).</p>
             </div>
           </button>
           <button

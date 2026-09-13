@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import type { StudioNodeTransform } from '../store/useAppStore';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { PLYExporter } from 'three/examples/jsm/exporters/PLYExporter.js';
 import { apiUrl } from './api';
 
 const EXTERNAL_CDN = /^https?:\/\/(?!localhost|127\.0\.0\.1)/i;
@@ -95,6 +98,29 @@ export async function exportObject3DToGlbArrayBuffer(root: THREE.Object3D): Prom
   const result = await exporter.parseAsync(root, { binary: true });
   if (result instanceof ArrayBuffer) return result;
   throw new Error('Expected GLB binary output');
+}
+
+export function exportObject3DToObjDataUrl(root: THREE.Object3D): string {
+  const exporter = new OBJExporter();
+  const result = exporter.parse(root);
+  return `data:text/plain;charset=utf-8,${encodeURIComponent(result)}`;
+}
+
+export function exportObject3DToStlDataUrl(root: THREE.Object3D): string {
+  const exporter = new STLExporter();
+  const result = exporter.parse(root, { binary: true });
+  // STLExporter returns a DataView for binary
+  const buffer = (result as any).buffer ? (result as any).buffer : (result as any);
+  return arrayBufferToGlbDataUrl(buffer).replace('model/gltf-binary', 'application/sla');
+}
+
+export function exportObject3DToPlyDataUrl(root: THREE.Object3D): Promise<string> {
+  const exporter = new PLYExporter();
+  return new Promise((resolve) => {
+    exporter.parse(root, (result: any) => {
+      resolve(arrayBufferToGlbDataUrl(result).replace('model/gltf-binary', 'application/ply'));
+    }, { binary: true });
+  });
 }
 
 export function centerObjectAtOrigin(object: THREE.Object3D) {
