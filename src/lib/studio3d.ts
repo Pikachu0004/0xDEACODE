@@ -149,6 +149,25 @@ export function fitCameraToObject(
   orbit.update();
 }
 
+export async function generatePrimitiveGlbDataUrl(type: 'cube' | 'sphere' | 'cylinder' | 'plane'): Promise<string> {
+  let geometry: THREE.BufferGeometry;
+  switch (type) {
+    case 'cube': geometry = new THREE.BoxGeometry(1, 1, 1); break;
+    case 'sphere': geometry = new THREE.SphereGeometry(0.5, 32, 16); break;
+    case 'cylinder': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
+    case 'plane':
+      geometry = new THREE.PlaneGeometry(1, 1);
+      geometry.rotateX(-Math.PI / 2);
+      break;
+    default: geometry = new THREE.BoxGeometry(1, 1, 1); break;
+  }
+  const material = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+  const mesh = new THREE.Mesh(geometry, material);
+  const group = new THREE.Group();
+  group.add(mesh);
+  return await exportObject3DToGlbDataUrl(group);
+}
+
 export function applyStudioTransform(obj: THREE.Object3D, t: StudioNodeTransform) {
   obj.position.set(...t.position);
   obj.rotation.set(...t.rotation);

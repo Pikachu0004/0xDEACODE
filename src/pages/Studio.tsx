@@ -13,11 +13,13 @@ import {
   exportObject3DToObjDataUrl,
   exportObject3DToStlDataUrl,
   exportObject3DToPlyDataUrl,
+  generatePrimitiveGlbDataUrl,
   fitCameraToObject,
   loadGltfMeshyWithAnimations,
   loadGltfWithAnimations,
   readStudioTransform,
 } from '../lib/studio3d';
+import { performCSG } from '../lib/studioCSG';
 import { submitWebArPublish } from '../lib/submitWebArPublish';
 import {
   countTriangles,
@@ -1123,6 +1125,76 @@ export default function Studio() {
     showStatus('Main model removed');
   };
 
+  const addPrimitive = async (type: 'cube' | 'sphere' | 'cylinder' | 'plane') => {
+    if (!id) return;
+    const cur = useAppStore.getState().projects.find((x) => x.id === id);
+    if (!cur) return;
+    showStatus(`Generating ${type}...`);
+    try {
+      const dataUrl = await generatePrimitiveGlbDataUrl(type);
+      const next: StudioExtraModel = {
+        id: `prim-${Date.now()}`,
+        name: type,
+        modelDataUrl: dataUrl,
+      };
+      updateProject(id, { studioExtras: [...(cur.studioExtras || []), next] });
+      showStatus(`${type} added`);
+    } catch (e) {
+      console.error(e);
+      showStatus('Failed to add primitive');
+    }
+  };
+
+  const performBooleanCSG = (operation: 'subtract' | 'union' | 'intersect') => {
+    if (!id) return;
+    const root = contentRootRef.current;
+    if (!root || selectionIds.length !== 2) {
+      showStatus('Select exactly 2 objects to perform boolean operations.');
+      return;
+    }
+    
+    // First selected is target, second is cutter
+    const targetId = selectionIds[0];
+    const cutterId = selectionIds[1];
+    
+    const targetObj = findSceneRootByStudioId(root, targetId);
+    const cutterObj = findSceneRootByStudioId(root, cutterId);
+    
+    if (!targetObj || !cutterObj) {
+      showStatus('Missing objects for CSG');
+      return;
+    }
+    
+    try {
+      showStatus('Calculating Boolean...');
+      const resultMesh = performCSG(targetObj, cutterObj, operation);
+      if (!resultMesh) {
+        showStatus('CSG failed (no geometry found)');
+        return;
+      }
+      
+      const group = new THREE.Group();
+      group.add(resultMesh);
+      exportObject3DToGlbDataUrl(group).then(dataUrl => {
+         const cur = useAppStore.getState().projects.find((x) => x.id === id);
+         if (!cur) return;
+         
+         const next: StudioExtraModel = {
+           id: `csg-${Date.now()}`,
+           name: `${operation} result`,
+           modelDataUrl: dataUrl,
+         };
+         
+         updateProject(id, { studioExtras: [...(cur.studioExtras || []), next] });
+         showStatus(`Boolean ${operation} applied!`);
+         setSelectionIds([next.id]);
+      });
+    } catch (e) {
+      console.error(e);
+      showStatus('Boolean error');
+    }
+  };
+
   const clearLogo = () => {
     if (!id) return;
     updateProject(id, { logoDataUrl: undefined });
@@ -1775,6 +1847,31 @@ export default function Studio() {
                 className={`w-full rounded-xl border border-white/10 bg-transparent px-3 py-2 text-xs resize-none ${themeInk}`}
               />
             </div>
+
+            <div>
+              <h2 className={`text-xs font-bold uppercase tracking-widest mb-3 ${themeMuted}`}>Add Primitive</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => addPrimitive('cube')} className={`p-2 text-xs border rounded hover:bg-white/5 ${themeInk}`}>Cube</button>
+                <button type="button" onClick={() => addPrimitive('sphere')} className={`p-2 text-xs border rounded hover:bg-white/5 ${themeInk}`}>Sphere</button>
+                <button type="button" onClick={() => addPrimitive('cylinder')} className={`p-2 text-xs border rounded hover:bg-white/5 ${themeInk}`}>Cylinder</button>
+                <button type="button" onClick={() => addPrimitive('plane')} className={`p-2 text-xs border rounded hover:bg-white/5 ${themeInk}`}>Plane</button>
+              </div>
+            </div>
+
+            {selectionIds.length === 2 && (
+              <div>
+                <h2 className={`text-xs font-bold uppercase tracking-widest mb-3 ${themeMuted} text-brand-primary`}>Boolean Operations</h2>
+                <p className={`text-[10px] mb-2 ${themeMuted}`}>
+                  Target: <strong>{hierarchyEntries.find((e) => e.id === selectionIds[0])?.label || 'Unknown'}</strong><br />
+                  Cutter: <strong>{hierarchyEntries.find((e) => e.id === selectionIds[1])?.label || 'Unknown'}</strong>
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button type="button" onClick={() => performBooleanCSG('subtract')} className={`p-2 text-xs border rounded hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 ${themeInk}`}>Subtract (Cut)</button>
+                  <button type="button" onClick={() => performBooleanCSG('union')} className={`p-2 text-xs border rounded hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/30 ${themeInk}`}>Join (Union)</button>
+                  <button type="button" onClick={() => performBooleanCSG('intersect')} className={`p-2 text-xs border rounded hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/30 ${themeInk}`}>Intersect</button>
+                </div>
+              </div>
+            )}
 
             <div>
               <h2 className={`text-xs font-bold uppercase tracking-widest mb-3 ${themeMuted}`}>Scene hierarchy</h2>
