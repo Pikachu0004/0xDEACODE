@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -192,6 +192,10 @@ export default function Studio() {
     amplitude: 0.12,
   });
 
+  const [selectedMeshName, setSelectedMeshName] = useState<string>('');
+  
+
+
   useEffect(() => {
     if (project) setProjectTitle(project.name);
   }, [project?.id, project?.name]);
@@ -208,6 +212,39 @@ export default function Studio() {
   const primarySource = project?.modelDataUrl || project?.modelUrl || '';
   const gizmoTargetId =
     selectionIds.length > 0 ? selectionIds[selectionIds.length - 1]! : '';
+
+  const availableMeshes = useMemo(() => {
+    const root = contentRootRef.current;
+    if (!root || !gizmoTargetId || gizmoTargetId === LOGO_ID) return [];
+    const target = findSceneRootByStudioId(root, gizmoTargetId);
+    if (!target) return [];
+    const meshes: string[] = [];
+    target.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh && child.name) {
+        meshes.push(child.name);
+      }
+    });
+    return meshes;
+  }, [gizmoTargetId, sceneContentVersion, sceneEpoch]);
+
+  const activePartConfig = useMemo(() => {
+    if (!selectedMeshName || !project?.interactiveParts) return null;
+    return project.interactiveParts[selectedMeshName] || null;
+  }, [selectedMeshName, project?.interactiveParts]);
+
+  const handleUpdatePart = useCallback((updates: any) => {
+    if (!id || !project || !selectedMeshName) return;
+    const parts = { ...(project.interactiveParts || {}) };
+    parts[selectedMeshName] = {
+      id: selectedMeshName,
+      name: selectedMeshName,
+      semanticTag: '',
+      interactionType: 'NONE',
+      ...(parts[selectedMeshName] || {}),
+      ...updates
+    };
+    updateProject(id, { interactiveParts: parts });
+  }, [id, project, selectedMeshName, updateProject]);
 
   useEffect(() => {
     if (!rigDialogOpen || !gizmoTargetId) return;
@@ -1106,8 +1143,6 @@ export default function Studio() {
       modelUrl: null,
       modelDataUrl: null,
       thumbnailUrl: null,
-      meshyPreviewTaskId: null,
-      meshyTaskId: null,
       modelUrls: null,
       studioTransforms: st,
       studioRigs: rigs,
@@ -2228,6 +2263,74 @@ export default function Studio() {
                     className="w-full accent-brand-primary h-1 bg-white/10 rounded-full"
                   />
                 </label>
+              </div>
+            </details>
+
+            <details className="group" open>
+              <summary className={`text-xs font-bold uppercase tracking-widest cursor-pointer list-none flex items-center gap-2 ${themeMuted}`}>
+                <Activity className="w-3.5 h-3.5" />
+                Behaviors &amp; Interactions
+              </summary>
+              <div className={`mt-3 space-y-3 text-[11px] ${uiTheme === 'light' ? 'text-zinc-800' : 'text-white/80'}`}>
+                <p className={themeMuted}>Configure interactive parts for WebAR.</p>
+                <label className="flex flex-col gap-1">
+                  <span className={themeMuted}>Select Mesh</span>
+                  <select
+                    value={selectedMeshName}
+                    onChange={(e) => setSelectedMeshName(e.target.value)}
+                    className="rounded border border-white/10 bg-black/50 px-2 py-1.5 text-xs text-white"
+                  >
+                    <option value="">-- None --</option>
+                    {availableMeshes.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </label>
+                
+                {selectedMeshName && (
+                  <>
+                    <label className="flex flex-col gap-1">
+                      <span className={themeMuted}>Interaction Type</span>
+                      <select
+                        value={activePartConfig?.interactionType || 'NONE'}
+                        onChange={(e) => handleUpdatePart({ interactionType: e.target.value })}
+                        className="rounded border border-white/10 bg-black/50 px-2 py-1.5 text-xs text-white"
+                      >
+                        <option value="NONE">None</option>
+                        <option value="OPEN_CLOSE">Open / Close</option>
+                        <option value="ROTATE">Rotate</option>
+                        <option value="ANIMATION">Trigger Animation</option>
+                      </select>
+                    </label>
+                    
+                    <label className="flex flex-col gap-1">
+                      <span className={themeMuted}>Semantic Tag</span>
+                      <input
+                        type="text"
+                        placeholder="e.g. Door, Wheel"
+                        value={activePartConfig?.semanticTag || ''}
+                        onChange={(e) => handleUpdatePart({ semanticTag: e.target.value })}
+                        className="rounded border border-white/10 bg-black/50 px-2 py-1.5 text-xs text-white"
+                      />
+                    </label>
+                    
+                    {activePartConfig?.interactionType === 'ANIMATION' && (
+                      <label className="flex flex-col gap-1">
+                        <span className={themeMuted}>Animation Name</span>
+                        <select
+                          value={activePartConfig?.animationName || ''}
+                          onChange={(e) => handleUpdatePart({ animationName: e.target.value })}
+                          className="rounded border border-white/10 bg-black/50 px-2 py-1.5 text-xs text-white"
+                        >
+                          <option value="">-- Select Animation --</option>
+                          {animClipList.map(a => (
+                            <option key={a} value={a}>{a}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </>
+                )}
               </div>
             </details>
 

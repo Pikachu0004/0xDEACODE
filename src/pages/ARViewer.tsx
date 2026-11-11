@@ -13,8 +13,10 @@ import {
   ChevronRight,
   Info,
   Loader2,
+  Play,
 } from 'lucide-react';
 import { apiFetch, apiUrl, type PublicShareResponse } from '../lib/api';
+import { InteractiveARViewer } from '../components/ar/InteractiveARViewer';
 
 const ModelViewer = 'model-viewer' as any;
 
@@ -24,6 +26,7 @@ const EXTERNAL_CDN = /^https?:\/\/(?!localhost|127\.0\.0\.1)/i;
 export default function ARViewer() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const [isInteractiveMode, setIsInteractiveMode] = useState(false);
   const location = useLocation();
   const { projects, user } = useAppStore();
   const [meshyBlobUrl, setMeshyBlobUrl] = useState<string | null>(null);
@@ -227,7 +230,14 @@ export default function ARViewer() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col">
+    <div className="min-h-screen bg-[#050505] flex flex-col relative">
+      {isInteractiveMode && modelUrlForViewer ? (
+        <InteractiveARViewer 
+          project={project || (shareMeta ? { interactiveParts: shareMeta.interactiveParts, capabilities: shareMeta.capabilities } as any : undefined)} 
+          modelUrl={modelUrlForViewer} 
+          onExit={() => setIsInteractiveMode(false)} 
+        />
+      ) : null}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/5 bg-black/40 backdrop-blur-md z-10">
         <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full sm:w-auto">
           <Link
@@ -297,19 +307,20 @@ export default function ARViewer() {
             </div>
           ) : null}
           {modelUrlForViewer ? (
-            <ModelViewer
-              key={modelUrlForViewer}
-              src={modelUrlForViewer}
-              ar
-              ar-modes="webxr scene-viewer quick-look"
-              camera-controls
-              auto-rotate
-              shadow-intensity="1"
-              exposure="1"
-              style={{ width: '100%', height: '100%', minHeight: '50vh', backgroundColor: '#0a0a0a' }}
-            >
-              <button
-                slot="ar-button"
+            <div className="relative w-full h-full min-h-[50vh]">
+              <ModelViewer
+                key={modelUrlForViewer}
+                src={modelUrlForViewer}
+                ar
+                ar-modes="webxr scene-viewer quick-look"
+                camera-controls
+                auto-rotate
+                shadow-intensity="1"
+                exposure="1"
+                style={{ width: '100%', height: '100%', minHeight: '50vh', backgroundColor: '#0a0a0a' }}
+              >
+                <button
+                  slot="ar-button"
                 className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] px-5 sm:px-8 py-3 sm:py-4 text-black text-sm sm:text-base font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-2xl"
                 style={{
                   backgroundColor: accent,
@@ -320,9 +331,17 @@ export default function ARViewer() {
                 }}
               >
                 <Smartphone className="w-5 h-5" />
-                {ctaLabel}
+                  {ctaLabel}
+                </button>
+              </ModelViewer>
+              <button
+                onClick={() => setIsInteractiveMode(true)}
+                className="absolute top-4 right-4 z-20 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-bold rounded-full shadow-lg flex items-center gap-2 transition-all"
+              >
+                <Play className="w-4 h-4" />
+                Interactive Mode
               </button>
-            </ModelViewer>
+            </div>
           ) : !meshyLoading && !meshyLoadError && !modelUrlForViewer ? (
             <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]">
               <p className="text-sm text-white/40">No model to display</p>

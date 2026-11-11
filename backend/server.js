@@ -1,4 +1,30 @@
 const path = require('path');
+const dns = require('dns');
+const originalLookup = dns.lookup;
+dns.lookup = function(hostname, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  } else if (typeof options === 'number') {
+    options = { family: options };
+  }
+  if (hostname.includes('tripo3d.ai') || hostname.includes('tripo3d.com')) {
+    return dns.resolve4(hostname, (err, addresses) => {
+      if (err) return callback(err);
+      if (!addresses || addresses.length === 0) {
+        const error = new Error(`ENOTFOUND ${hostname}`);
+        error.code = 'ENOTFOUND';
+        return callback(error);
+      }
+      if (options && options.all) {
+        const result = addresses.map(addr => ({ address: addr, family: 4 }));
+        return callback(null, result);
+      }
+      return callback(null, addresses[0], 4);
+    });
+  }
+  return originalLookup(hostname, options, callback);
+};
 // Always load backend/.env — not cwd — so `node backend/server.js` from repo root still uses Atlas/JWT from this folder.
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const connectToMongo = require('./db');

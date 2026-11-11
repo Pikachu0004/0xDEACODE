@@ -10,6 +10,7 @@ import {
   type ProjectsListResponse,
 } from '../lib/api';
 import { isMongoObjectId } from '../lib/mongoId';
+import type { InteractivePart, ModelCapabilities } from '../types/interactions';
 
 export interface User {
   id: string;
@@ -86,6 +87,8 @@ export interface Project {
   arPageTagline?: string;
   arCtaLabel?: string;
   arAccentHex?: string;
+  capabilities?: ModelCapabilities;
+  interactiveParts?: Record<string, InteractivePart>;
 }
 
 /** Strip stale blob: URLs from persisted projects (they 404 after the tab/session ends). */
@@ -146,6 +149,8 @@ const REMOTE_PROJECT_KEYS = new Set([
   'arPageTagline',
   'arCtaLabel',
   'arAccentHex',
+  'capabilities',
+  'interactiveParts',
 ]);
 
 function projectToRemotePatch(merged: Project): Record<string, unknown> {
@@ -206,6 +211,8 @@ export function apiProjectToProject(p: ApiProject): Project {
     arPageTagline: p.arPageTagline,
     arCtaLabel: p.arCtaLabel,
     arAccentHex: p.arAccentHex,
+    capabilities: p.capabilities as unknown as ModelCapabilities | undefined,
+    interactiveParts: p.interactiveParts as unknown as Record<string, InteractivePart> | undefined,
   };
 }
 

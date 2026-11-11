@@ -16,6 +16,7 @@
     "@react-three/cannon": "^6.6.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@react-three/xr": "^6.6.30",
     "@tailwindcss/vite": "^4.2.2",
     "@types/three": "^0.182.0",
     "@vitejs/plugin-react": "^5.0.4",

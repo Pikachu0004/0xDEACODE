@@ -45,6 +45,8 @@ const studioProjectSchema = new mongoose.Schema(
     studioTransforms: { type: mongoose.Schema.Types.Mixed, default: {} },
     /** Motion rig preview configs keyed by scene node id (primary / extra ids). */
     studioRigs: { type: mongoose.Schema.Types.Mixed, default: {} },
+    capabilities: { type: mongoose.Schema.Types.Mixed, default: {} },
+    interactiveParts: { type: mongoose.Schema.Types.Mixed, default: {} },
     studioExtras: [studioExtraSchema],
     logoScale: Number,
     logoOffsetY: Number,

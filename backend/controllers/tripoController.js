@@ -103,10 +103,11 @@ exports.generate3DModel = async (req, res) => {
     if (status === 402) {
       return res.status(402).json({ message: error.message });
     }
+    const tripoMsg = error.response?.data?.message || error.message;
     console.error('Generate 3D Model Error:', error.response?.data || error.message);
-    res.status(500).json({
-      message: 'Failed to create 3D generation task',
-      error: error.response?.data?.message || error.message,
+    res.status(status || 500).json({
+      message: tripoMsg || 'Failed to create 3D generation task',
+      error: tripoMsg,
     });
   }
 };
@@ -222,10 +223,11 @@ exports.generateFromImage = async (req, res) => {
     if (status === 402) {
       return res.status(402).json({ message: error.message });
     }
+    const tripoMsg = error.response?.data?.message || error.message;
     console.error('Generate From Image Error:', error.response?.data || error.message);
-    res.status(500).json({
-      message: 'Failed to create image-to-3D task',
-      error: error.response?.data?.message || error.message,
+    res.status(status || 500).json({
+      message: tripoMsg || 'Failed to create image-to-3D task',
+      error: tripoMsg,
     });
   }
 };

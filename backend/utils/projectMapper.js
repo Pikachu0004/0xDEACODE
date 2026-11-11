@@ -33,6 +33,8 @@ exports.toClientProject = (doc) => {
     arPageTagline: o.arPageTagline,
     arCtaLabel: o.arCtaLabel,
     arAccentHex: o.arAccentHex,
+    capabilities: o.capabilities,
+    interactiveParts: o.interactiveParts,
     arGlbUploadedAt: o.arGlbUploadedAt ? new Date(o.arGlbUploadedAt).toISOString() : undefined,
   });
 };

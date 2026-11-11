@@ -79,6 +79,8 @@ const PATCHABLE = new Set([
   'arPageTagline',
   'arCtaLabel',
   'arAccentHex',
+  'capabilities',
+  'interactiveParts',
 ]);
 
 exports.updateProject = async (req, res) => {
@@ -299,6 +301,8 @@ exports.getPublicShare = async (req, res) => {
       arAccentHex: doc.arAccentHex ? String(doc.arAccentHex).trim() : '',
       description: doc.description ? String(doc.description).slice(0, 2000) : '',
       modelUrl: `/api/projects/share/${id}/model.glb`,
+      capabilities: doc.capabilities || {},
+      interactiveParts: doc.interactiveParts || {},
     });
   } catch (e) {
     console.error('getPublicShare', e);

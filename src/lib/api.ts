@@ -44,9 +44,13 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const msg =
+      (data && typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error: string }).error === 'string' && (data as { error: string }).error
+        ? (data as { error: string }).error
+        : null) ||
       (data && typeof data === 'object' && data !== null && 'message' in data && typeof (data as { message: string }).message === 'string'
         ? (data as { message: string }).message
-        : null) || res.statusText;
+        : null) ||
+      res.statusText;
     const err = new Error(msg) as Error & { status?: number; body?: unknown };
     err.status = res.status;
     err.body = data;
@@ -154,6 +158,8 @@ export type ApiProject = {
   arCtaLabel?: string;
   arAccentHex?: string;
   arGlbUploadedAt?: string;
+  capabilities?: Record<string, unknown>;
+  interactiveParts?: Record<string, unknown>;
 };
 
 /** Public WebAR metadata (no auth). `modelUrl` is an API path; use {@link apiUrl}. */
@@ -166,6 +172,8 @@ export type PublicShareResponse = {
   arAccentHex: string;
   description: string;
   modelUrl: string;
+  capabilities?: Record<string, unknown>;
+  interactiveParts?: Record<string, unknown>;
 };
 
 export type ProjectsListResponse = { projects: ApiProject[] };
