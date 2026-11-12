@@ -4,6 +4,72 @@ const axios = require('axios');
 const { UPLOAD_DIR } = require('../utils/arGlbPaths');
 
 /**
+ * Robustly extracts the generated 3D model URL or file path from any Gradio return format.
+ */
+function extractModelUrlOrPath(data) {
+  if (!data) return null;
+
+  function checkItem(item) {
+    if (!item) return null;
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      if (
+        trimmed.endsWith('.glb') ||
+        trimmed.endsWith('.obj') ||
+        trimmed.includes('.glb?') ||
+        trimmed.includes('/file=')
+      ) {
+        return trimmed;
+      }
+      // Check if it's HTML with /static/.../textured_mesh.html
+      const staticMatch = trimmed.match(/\/static\/([a-zA-Z0-9_.-]+)\/(?:textured_mesh|white_mesh)\.html/);
+      if (staticMatch) {
+        return `https://tencent-hunyuan3d-2-1.hf.space/static/${staticMatch[1]}/textured_mesh.glb`;
+      }
+      const httpGlb = trimmed.match(/https?:\/\/[^\s"'<>]+\.(?:glb|obj)/i);
+      if (httpGlb) {
+        return httpGlb[0];
+      }
+      return null;
+    }
+
+    if (typeof item === 'object') {
+      if (item.url && typeof item.url === 'string') return item.url;
+      if (item.path && typeof item.path === 'string') return item.path;
+      if (item.value) {
+        const fromVal = checkItem(item.value);
+        if (fromVal) return fromVal;
+      }
+      if (item.data) {
+        const fromData = checkItem(item.data);
+        if (fromData) return fromData;
+      }
+    }
+    return null;
+  }
+
+  if (Array.isArray(data)) {
+    // Priority: index 1 (textured mesh), then index 0 (mesh), then remaining
+    const priority = [data[1], data[0], ...data.slice(2)];
+    for (const el of priority) {
+      const found = checkItem(el);
+      if (found) return found;
+    }
+    // Scan all string items for iframe /static/ patterns
+    for (const el of data) {
+      if (typeof el === 'string') {
+        const m = el.match(/\/static\/([a-zA-Z0-9_.-]+)\//);
+        if (m && m[1]) {
+          return `https://tencent-hunyuan3d-2-1.hf.space/static/${m[1]}/textured_mesh.glb`;
+        }
+      }
+    }
+  }
+
+  return checkItem(data);
+}
+
+/**
  * Runs Hunyuan3D-2.1 generation asynchronously.
  * Supports both prompt-to-3D (via Pollinations concept image) and image-to-3D.
  */
@@ -83,23 +149,28 @@ async function runHunyuanGeneration({ prompt, imageInput, taskId, updateTask }) 
       true,          // randomize_seed
     ]);
 
+    console.log('[Hunyuan3D] Prediction finished. Raw result data:', JSON.stringify(result?.data));
+
     await updateTask({ progress: 85, status: 'RUNNING' });
 
-    // Step 5: Locate the generated GLB
-    // result.data: [File (shape), File (textured), Html, Json, Seed]
-    const glbFileInfo = result.data?.[1] || result.data?.[0];
-    if (!glbFileInfo || (!glbFileInfo.url && !glbFileInfo.path)) {
-      throw new Error('Hunyuan3D finished but did not return a 3D model file.');
+    // Step 5: Locate the generated 3D model
+    let modelLocation = extractModelUrlOrPath(result?.data);
+    if (!modelLocation) {
+      console.error('[Hunyuan3D] Could not find model in data:', result?.data);
+      throw new Error('Hunyuan3D finished but model file was not located in output.');
+    }
+
+    if (modelLocation.startsWith('/')) {
+      modelLocation = `https://tencent-hunyuan3d-2-1.hf.space${modelLocation}`;
     }
 
     const destGlbPath = path.join(UPLOAD_DIR, `${taskId}.glb`);
-    const downloadUrl = glbFileInfo.url || glbFileInfo.path;
 
-    if (downloadUrl.startsWith('http')) {
-      const glbRes = await axios.get(downloadUrl, { responseType: 'arraybuffer', timeout: 60000 });
+    if (modelLocation.startsWith('http')) {
+      const glbRes = await axios.get(modelLocation, { responseType: 'arraybuffer', timeout: 90000 });
       fs.writeFileSync(destGlbPath, Buffer.from(glbRes.data));
-    } else if (fs.existsSync(downloadUrl)) {
-      fs.copyFileSync(downloadUrl, destGlbPath);
+    } else if (fs.existsSync(modelLocation)) {
+      fs.copyFileSync(modelLocation, destGlbPath);
     }
 
     // Clean up temporary image
@@ -135,4 +206,5 @@ async function runHunyuanGeneration({ prompt, imageInput, taskId, updateTask }) 
 
 module.exports = {
   runHunyuanGeneration,
+  extractModelUrlOrPath,
 };
