@@ -104,7 +104,7 @@ export default function ProjectChat() {
   /** Staged reference image for Tripo image-to-3D (data URL). */
   const [stagedImage, setStagedImage] = useState<string | null>(null);
   const [meshyProgress, setMeshyProgress] = useState(0);
-  const [selectedProvider, setSelectedProvider] = useState('Hunyuan3D (Free)');
+  const [selectedProvider, setSelectedProvider] = useState('Auto (Best Free Engine)');
   const [isProviderOpen, setIsProviderOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -132,12 +132,21 @@ export default function ProjectChat() {
   const currentMessages = chatHistory[id || ''] || [];
 
   const providers = [
+    { name: 'Auto (Best Free Engine)', icon: Sparkles, desc: 'Tries fastest/low-quota engine first with auto-fallback' },
+    { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
+    { name: 'Hunyuan3D (Free · Detail)', icon: Box, desc: 'Tencent High-Detail 3D Engine' },
     { name: 'Tripo AI', icon: Sparkles, desc: 'Commercial 3D engine (Requires Tripo Credits)' },
-    { name: 'Hunyuan3D (Free)', icon: Box, desc: 'Tencent Open-Source 3D Engine (100% Free)' },
     { name: 'Hyper3D', icon: Box, desc: 'Fastest text-to-3D generation' },
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
-    { name: 'Telles AI', icon: RefreshCw, desc: 'Microsoft Research 3D engine' },
   ];
+
+  const getEngineKey = (provider: string): 'auto' | 'trellis' | 'hunyuan' | 'tripo' | null => {
+    if (provider.startsWith('Auto')) return 'auto';
+    if (provider.startsWith('TRELLIS')) return 'trellis';
+    if (provider.startsWith('Hunyuan3D')) return 'hunyuan';
+    if (provider === 'Tripo AI') return 'tripo';
+    return null;
+  };
 
   useEffect(() => {
     if (!project) return;
@@ -250,11 +259,15 @@ export default function ProjectChat() {
     if (!input.trim() || isGenerating) return;
 
     const currentInput = input.trim();
-    const isHunyuan = selectedProvider === 'Hunyuan3D (Free)';
-    const isTripo = selectedProvider === 'Tripo AI';
-    const isAiEngine = isTripo || isHunyuan;
-    const engine = isHunyuan ? 'hunyuan' : 'tripo';
-    const engineLabel = isHunyuan ? 'Hunyuan3D' : 'Tripo';
+    const engineKey = getEngineKey(selectedProvider);
+    const isAiEngine = engineKey !== null;
+    const engineLabel = engineKey === 'auto'
+      ? 'Auto 3D'
+      : engineKey === 'trellis'
+        ? 'TRELLIS'
+        : engineKey === 'hunyuan'
+          ? 'Hunyuan3D'
+          : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -267,11 +280,11 @@ export default function ProjectChat() {
     setInput('');
     setIsGenerating(true);
 
-    if (isAiEngine) {
+    if (isAiEngine && engineKey) {
       try {
         setMeshyProgress(0);
 
-        const taskId = await createTripoTextTask(currentInput, gen.poly, engine);
+        const taskId = await createTripoTextTask(currentInput, gen.poly, engineKey);
         const finalTask: TripoTaskPayload = await pollTripoTask(taskId, currentInput, {
           onProgress: (n) => setMeshyProgress(n),
         });
@@ -362,20 +375,24 @@ export default function ProjectChat() {
     }, 3000);
   };
 
-  /** Image-to-3D using staged browser data URL (Tripo or Hunyuan3D Free). */
+  /** Image-to-3D using staged browser data URL (Auto, TRELLIS, Hunyuan3D Free, or Tripo). */
   const handleGenerateFromImage = async () => {
-    const isHunyuan = selectedProvider === 'Hunyuan3D (Free)';
-    const isTripo = selectedProvider === 'Tripo AI';
-    const isAiEngine = isTripo || isHunyuan;
-    if (!stagedImage || !isAiEngine) return;
+    const engineKey = getEngineKey(selectedProvider);
+    if (!stagedImage || !engineKey) return;
 
-    const engine = isHunyuan ? 'hunyuan' : 'tripo';
-    const engineLabel = isHunyuan ? 'Hunyuan3D' : 'Tripo';
+    const engineLabel =
+      engineKey === 'auto'
+        ? 'Auto 3D'
+        : engineKey === 'trellis'
+          ? 'TRELLIS'
+          : engineKey === 'hunyuan'
+            ? 'Hunyuan3D'
+            : 'Tripo';
 
     setIsGenerating(true);
     setMeshyProgress(0);
     try {
-      const taskId = await createTripoImageTask(stagedImage, gen.poly, engine);
+      const taskId = await createTripoImageTask(stagedImage, gen.poly, engineKey);
       addChatMessage(id!, {
         id: Math.random().toString(36).substr(2, 9),
         role: 'user',
@@ -881,12 +898,12 @@ export default function ProjectChat() {
                     <span className="text-sm text-white/40 italic">
                       {isGenerating3D
                         ? `Building GLB (${gen.poly})…`
-                        : isGenerating && (selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)')
-                          ? `${selectedProvider === 'Hunyuan3D (Free)' ? 'Hunyuan3D (Free)' : 'Tripo'} is generating your 3D model…`
+                        : isGenerating && getEngineKey(selectedProvider) !== null
+                          ? `${selectedProvider} is generating your 3D model…`
                           : `${selectedProvider} is thinking…`}
                     </span>
                   </div>
-                  {isGenerating && (selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)') && meshyProgress > 0 ? (
+                  {isGenerating && getEngineKey(selectedProvider) !== null && meshyProgress > 0 ? (
                     <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-brand-primary to-teal-400 transition-all duration-300"
@@ -904,7 +921,7 @@ export default function ProjectChat() {
 
         <div className="p-6 md:p-8 border-t border-white/5 bg-black/40 backdrop-blur-xl">
           <div className="max-w-3xl mx-auto">
-            {(selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)') && stagedImage ? (
+            {getEngineKey(selectedProvider) !== null && stagedImage ? (
               <div className="mb-4 flex flex-col sm:flex-row gap-4 items-start rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                 <img
                   src={stagedImage}
@@ -1028,7 +1045,7 @@ export default function ProjectChat() {
                   onClick={() => imageInputRef.current?.click()}
                   className="p-3 md:p-4 text-white/30 hover:text-brand-primary transition-colors rounded-full hover:bg-white/5 shrink-0"
                   title={
-                    selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)'
+                    getEngineKey(selectedProvider) !== null
                       ? 'Attach image for image-to-3D (preview above, then Generate)'
                       : 'Attach image'
                   }
