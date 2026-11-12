@@ -47,7 +47,7 @@ function mapPolyToTarget(poly) {
 exports.generate3DModel = async (req, res) => {
   const { prompt, target_polycount, poly_budget, engine: rawEngine } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
-  const engine = ['auto', 'trellis', 'hunyuan', 'tripo'].includes(requestedEngine)
+  const engine = ['auto', 'wavespeed', 'trellis', 'hunyuan', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'auto';
 
@@ -56,8 +56,8 @@ exports.generate3DModel = async (req, res) => {
       return res.status(400).json({ message: 'Prompt is required' });
     }
 
-    if (['auto', 'trellis', 'hunyuan'].includes(engine)) {
-      const prefix = engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : 'auto_';
+    if (['auto', 'wavespeed', 'trellis', 'hunyuan'].includes(engine)) {
+      const prefix = engine === 'wavespeed' ? 'ws_' : engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : 'auto_';
       const taskId = `${prefix}${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const task = await Tripo3DTask.create({
         userId: req.user._id,
@@ -200,7 +200,7 @@ exports.generate3DModel = async (req, res) => {
 exports.generateFromImage = async (req, res) => {
   const { image_url, image_data_url, poly_budget, target_polycount, engine: rawEngine } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
-  const engine = ['auto', 'trellis', 'hunyuan', 'tripo'].includes(requestedEngine)
+  const engine = ['auto', 'wavespeed', 'trellis', 'hunyuan', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'auto';
   const imageInput = String(image_data_url || image_url || '').trim();
@@ -210,8 +210,8 @@ exports.generateFromImage = async (req, res) => {
       return res.status(400).json({ message: 'image_data_url or image_url is required' });
     }
 
-    if (['auto', 'trellis', 'hunyuan'].includes(engine)) {
-      const prefix = engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : 'auto_';
+    if (['auto', 'wavespeed', 'trellis', 'hunyuan'].includes(engine)) {
+      const prefix = engine === 'wavespeed' ? 'ws_' : engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : 'auto_';
       const taskId = `${prefix}${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const task = await Tripo3DTask.create({
         userId: req.user._id,
@@ -409,9 +409,10 @@ exports.getTaskStatus = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Free internal tasks (TRELLIS, Hunyuan3D, Auto) are managed internally in DB
+    // Internal tasks (WaveSpeed, TRELLIS, Hunyuan3D, Auto) are managed internally in DB
     if (
-      ['auto', 'hunyuan', 'trellis'].includes(task.engine) ||
+      ['auto', 'wavespeed', 'hunyuan', 'trellis'].includes(task.engine) ||
+      task.taskId.startsWith('ws_') ||
       task.taskId.startsWith('hy_') ||
       task.taskId.startsWith('tr_') ||
       task.taskId.startsWith('auto_')

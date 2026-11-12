@@ -35,8 +35,8 @@ function createApp() {
     res.json({
       status: 'OK',
       message: 'Pixora 3D Backend is running',
-      version: '1.2.0-multi-engine',
-      supportedEngines: ['auto', 'trellis', 'hunyuan', 'tripo'],
+      version: '1.3.0-wavespeed',
+      supportedEngines: ['auto', 'wavespeed', 'trellis', 'hunyuan', 'tripo'],
       timestamp: new Date().toISOString(),
     });
   });

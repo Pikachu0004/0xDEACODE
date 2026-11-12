@@ -1,11 +1,24 @@
+const { runWaveSpeedGeneration, getWaveSpeedKey } = require('./wavespeedService');
 const { runTrellisGeneration } = require('./trellisService');
 const { runHunyuanGeneration } = require('./hunyuanService');
 
 /**
  * Executes 3D model generation using either a specific engine
- * or the Auto-fallback strategy (tries fastest/lowest quota first, then falls back).
+ * or the Auto-fallback strategy (tries WaveSpeed first if key configured, then free engines).
  */
 async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId, updateTask }) {
+  if (engine === 'wavespeed') {
+    try {
+      await runWaveSpeedGeneration({ prompt, imageInput, taskId, updateTask });
+    } catch (err) {
+      await updateTask({
+        status: 'FAILED',
+        errorMessage: err.message || 'WaveSpeed 3D generation failed',
+      });
+    }
+    return;
+  }
+
   if (engine === 'trellis') {
     try {
       await runTrellisGeneration({ prompt, imageInput, taskId, updateTask });
@@ -33,29 +46,43 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
   // Engine === 'auto': Smart Fallback
   console.log(`[Auto 3D] Starting Auto mode for task ${taskId}...`);
 
-  // Attempt 1: TRELLIS (Microsoft Research - fast & light on quota)
+  // If user configured WAVESPEED_API_KEY in Render, prioritize WaveSpeed AI
+  if (getWaveSpeedKey()) {
+    try {
+      console.log(`[Auto 3D] Attempting WaveSpeed AI with user API key...`);
+      await updateTask({ progress: 10, status: 'RUNNING' });
+      await runWaveSpeedGeneration({ prompt, imageInput, taskId, updateTask });
+      console.log(`[Auto 3D] WaveSpeed AI succeeded for task ${taskId}!`);
+      return;
+    } catch (wsErr) {
+      console.warn(`[Auto 3D] WaveSpeed attempt failed (${wsErr.message}). Falling back to TRELLIS...`);
+      await updateTask({ progress: 20, status: 'RUNNING' });
+    }
+  }
+
+  // Attempt: TRELLIS
   try {
-    console.log(`[Auto 3D] Attempting TRELLIS first...`);
-    await updateTask({ progress: 10, status: 'RUNNING' });
+    console.log(`[Auto 3D] Attempting TRELLIS...`);
+    await updateTask({ progress: 30, status: 'RUNNING' });
     await runTrellisGeneration({ prompt, imageInput, taskId, updateTask });
     console.log(`[Auto 3D] TRELLIS succeeded for task ${taskId}!`);
     return;
   } catch (trellisErr) {
     console.warn(`[Auto 3D] TRELLIS attempt failed (${trellisErr.message}). Falling back to Hunyuan3D...`);
-    await updateTask({ progress: 20, status: 'RUNNING' });
+    await updateTask({ progress: 40, status: 'RUNNING' });
   }
 
-  // Attempt 2: Hunyuan3D (Tencent - high detail fallback)
+  // Attempt: Hunyuan3D
   try {
     console.log(`[Auto 3D] Attempting Hunyuan3D fallback...`);
     await runHunyuanGeneration({ prompt, imageInput, taskId, updateTask });
     console.log(`[Auto 3D] Hunyuan3D succeeded for task ${taskId}!`);
     return;
   } catch (hunyuanErr) {
-    console.error(`[Auto 3D] Both free engines failed for task ${taskId}:`, hunyuanErr.message);
+    console.error(`[Auto 3D] All engines failed for task ${taskId}:`, hunyuanErr.message);
     await updateTask({
       status: 'FAILED',
-      errorMessage: `Generation failed across available free engines. Please try again or switch engine: ${hunyuanErr.message}`,
+      errorMessage: `Generation failed across available engines: ${hunyuanErr.message}`,
     });
   }
 }
@@ -63,4 +90,3 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
 module.exports = {
   dispatchGeneration,
 };
-

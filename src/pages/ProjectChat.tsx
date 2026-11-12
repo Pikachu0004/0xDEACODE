@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   Paperclip,
   X,
+  Zap,
 } from 'lucide-react';
 import { ArdyaWordmark } from '../components/ArdyaWordmark';
 import { MeshyFormatDownloadLinks } from '../components/MeshyFormatDownloadLinks';
@@ -132,7 +133,8 @@ export default function ProjectChat() {
   const currentMessages = chatHistory[id || ''] || [];
 
   const providers = [
-    { name: 'Auto (Best Free Engine)', icon: Sparkles, desc: 'Tries fastest/low-quota engine first with auto-fallback' },
+    { name: 'Auto (Best Free Engine)', icon: Sparkles, desc: 'Tries WaveSpeed / fast low-quota engine first with auto-fallback' },
+    { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
     { name: 'Hunyuan3D (Free · Detail)', icon: Box, desc: 'Tencent High-Detail 3D Engine' },
     { name: 'Tripo AI', icon: Sparkles, desc: 'Commercial 3D engine (Requires Tripo Credits)' },
@@ -140,8 +142,9 @@ export default function ProjectChat() {
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
   ];
 
-  const getEngineKey = (provider: string): 'auto' | 'trellis' | 'hunyuan' | 'tripo' | null => {
+  const getEngineKey = (provider: string): 'auto' | 'wavespeed' | 'trellis' | 'hunyuan' | 'tripo' | null => {
     if (provider.startsWith('Auto')) return 'auto';
+    if (provider.startsWith('WaveSpeed')) return 'wavespeed';
     if (provider.startsWith('TRELLIS')) return 'trellis';
     if (provider.startsWith('Hunyuan3D')) return 'hunyuan';
     if (provider === 'Tripo AI') return 'tripo';
@@ -263,11 +266,13 @@ export default function ProjectChat() {
     const isAiEngine = engineKey !== null;
     const engineLabel = engineKey === 'auto'
       ? 'Auto 3D'
-      : engineKey === 'trellis'
-        ? 'TRELLIS'
-        : engineKey === 'hunyuan'
-          ? 'Hunyuan3D'
-          : 'Tripo';
+      : engineKey === 'wavespeed'
+        ? 'WaveSpeed AI'
+        : engineKey === 'trellis'
+          ? 'TRELLIS'
+          : engineKey === 'hunyuan'
+            ? 'Hunyuan3D'
+            : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -383,11 +388,13 @@ export default function ProjectChat() {
     const engineLabel =
       engineKey === 'auto'
         ? 'Auto 3D'
-        : engineKey === 'trellis'
-          ? 'TRELLIS'
-          : engineKey === 'hunyuan'
-            ? 'Hunyuan3D'
-            : 'Tripo';
+        : engineKey === 'wavespeed'
+          ? 'WaveSpeed AI'
+          : engineKey === 'trellis'
+            ? 'TRELLIS'
+            : engineKey === 'hunyuan'
+              ? 'Hunyuan3D'
+              : 'Tripo';
 
     setIsGenerating(true);
     setMeshyProgress(0);
