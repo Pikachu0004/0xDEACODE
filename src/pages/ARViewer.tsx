@@ -14,9 +14,11 @@ import {
   Info,
   Loader2,
   Play,
+  Camera,
 } from 'lucide-react';
 import { apiFetch, apiUrl, type PublicShareResponse } from '../lib/api';
 import { InteractiveARViewer } from '../components/ar/InteractiveARViewer';
+import { UniversalCameraAR } from '../components/ar/UniversalCameraAR';
 
 const ModelViewer = 'model-viewer' as any;
 
@@ -27,6 +29,7 @@ export default function ARViewer() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const [isInteractiveMode, setIsInteractiveMode] = useState(false);
+  const [isCameraARActive, setIsCameraARActive] = useState(false);
   const location = useLocation();
   const { projects, user } = useAppStore();
   const [meshyBlobUrl, setMeshyBlobUrl] = useState<string | null>(null);
@@ -231,6 +234,13 @@ export default function ARViewer() {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col relative">
+      {isCameraARActive && modelUrlForViewer ? (
+        <UniversalCameraAR
+          modelUrl={modelUrlForViewer}
+          title={title}
+          onClose={() => setIsCameraARActive(false)}
+        />
+      ) : null}
       {isInteractiveMode && modelUrlForViewer ? (
         <InteractiveARViewer 
           project={project || (shareMeta ? { interactiveParts: shareMeta.interactiveParts, capabilities: shareMeta.capabilities } as any : undefined)} 
@@ -321,19 +331,33 @@ export default function ARViewer() {
               >
                 <button
                   slot="ar-button"
-                className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] px-5 sm:px-8 py-3 sm:py-4 text-black text-sm sm:text-base font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-2xl"
-                style={{
-                  backgroundColor: accent,
-                  boxShadow:
-                    accent && accent !== '#10b981'
-                      ? `0 25px 50px -12px ${accent}66`
-                      : '0 25px 50px -12px rgba(16, 185, 129, 0.4)',
-                }}
-              >
-                <Smartphone className="w-5 h-5" />
-                  {ctaLabel}
-                </button>
+                  style={{ display: 'none' }}
+                />
               </ModelViewer>
+
+              {/* Universal Web Camera AR Primary Action (Works on ALL Devices & Phones) */}
+              <div className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 max-w-[calc(100%-2rem)] w-full sm:w-auto px-4">
+                <button
+                  type="button"
+                  onClick={() => setIsCameraARActive(true)}
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 text-black text-sm sm:text-base font-bold rounded-full transition-all flex items-center justify-center gap-2.5 shadow-2xl hover:scale-105 active:scale-95 cursor-pointer"
+                  style={{
+                    backgroundColor: accent,
+                    boxShadow:
+                      accent && accent !== '#10b981'
+                        ? `0 25px 50px -12px ${accent}88`
+                        : '0 25px 50px -12px rgba(16, 185, 129, 0.6)',
+                  }}
+                >
+                  <Camera className="w-5 h-5 shrink-0" />
+                  <span>{ctaLabel}</span>
+                </button>
+                <div className="px-3.5 py-1 rounded-full bg-black/80 backdrop-blur-md border border-white/15 text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Universal WebAR · No ARCore Required
+                </div>
+              </div>
+
               <button
                 onClick={() => setIsInteractiveMode(true)}
                 className="absolute top-4 right-4 z-20 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-bold rounded-full shadow-lg flex items-center gap-2 transition-all"
@@ -387,10 +411,10 @@ export default function ARViewer() {
             <h3 className="text-xs font-bold uppercase tracking-widest text-white/40">Compatibility</h3>
             <div className="space-y-3">
               {[
-                { label: 'iOS (Safari)', status: 'Supported', color: 'text-emerald-500' },
-                { label: 'Android (Chrome)', status: 'Supported', color: 'text-emerald-500' },
-                { label: 'WebXR', status: 'Supported', color: 'text-emerald-500' },
-                { label: 'Scene Viewer', status: 'Supported', color: 'text-emerald-500' },
+                { label: 'Universal WebAR (Any Camera)', status: '100% Supported', color: 'text-emerald-400 font-bold' },
+                { label: 'Android (Chrome / Camera)', status: 'Supported', color: 'text-emerald-500' },
+                { label: 'iOS (Safari / Quick Look)', status: 'Supported', color: 'text-emerald-500' },
+                { label: 'Google ARCore / Scene Viewer', status: 'Optional', color: 'text-white/40' },
               ].map((c, i) => (
                 <div
                   key={i}
