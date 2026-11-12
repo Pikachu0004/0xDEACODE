@@ -45,7 +45,11 @@ function mapPolyToTarget(poly) {
 
 // POST /api/tripo/generate — Tripo / Hunyuan text-to-3d
 exports.generate3DModel = async (req, res) => {
-  const { prompt, target_polycount, poly_budget, engine = 'tripo' } = req.body || {};
+  const { prompt, target_polycount, poly_budget, engine: rawEngine } = req.body || {};
+  const requestedEngine = String(rawEngine || '').toLowerCase().trim();
+  const engine = ['auto', 'trellis', 'hunyuan', 'tripo'].includes(requestedEngine)
+    ? requestedEngine
+    : 'auto';
 
   try {
     if (!prompt || typeof prompt !== 'string') {
@@ -103,9 +107,50 @@ exports.generate3DModel = async (req, res) => {
       face_limit: Math.min(300000, Math.max(100, Math.round(face_limit))),
     };
 
-    const createRes = await axios.post(`${TRIPO_API_BASE}/task`, body, {
-      headers: tripoHeaders(),
-    });
+    let createRes;
+    try {
+      createRes = await axios.post(`${TRIPO_API_BASE}/task`, body, {
+        headers: tripoHeaders(),
+      });
+    } catch (tripoErr) {
+      const tripoMsg = tripoErr.response?.data?.message || tripoErr.message || '';
+      const tripoCode = tripoErr.response?.data?.code;
+      // Auto-fallback to free engine if Tripo account has no credit
+      if (tripoCode === 2010 || /credit/i.test(tripoMsg)) {
+        console.warn('[Tripo] Account balance 0. Falling back to free Auto engine (TRELLIS)...');
+        const taskId = `auto_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const task = await Tripo3DTask.create({
+          userId: req.user._id,
+          taskId,
+          prompt: prompt.trim().slice(0, 600),
+          tripoApiKind: 'text_to_model',
+          status: 'QUEUED',
+          engine: 'auto',
+        });
+        dispatchGeneration({
+          engine: 'auto',
+          prompt: task.prompt,
+          taskId,
+          updateTask: async (fields) => {
+            await Tripo3DTask.updateOne({ taskId }, { $set: fields });
+          },
+        });
+        const creditsRemaining = await getCreditsRemaining(req.user._id);
+        return res.status(201).json({
+          message: 'Tripo credits unavailable. Switched to Free Auto 3D engine.',
+          creditsCharged: 0,
+          creditsRemaining,
+          task: {
+            _id: task._id,
+            taskId: task.taskId,
+            prompt: task.prompt,
+            status: task.status,
+            createdAt: task.createdAt,
+          },
+        });
+      }
+      throw tripoErr;
+    }
 
     const data = createRes.data?.data || createRes.data;
     const taskId = data.task_id || data.taskId;
@@ -153,7 +198,11 @@ exports.generate3DModel = async (req, res) => {
 
 // POST /api/tripo/generate-from-image — Tripo / Hunyuan image-to-3d
 exports.generateFromImage = async (req, res) => {
-  const { image_url, image_data_url, poly_budget, target_polycount, engine = 'tripo' } = req.body || {};
+  const { image_url, image_data_url, poly_budget, target_polycount, engine: rawEngine } = req.body || {};
+  const requestedEngine = String(rawEngine || '').toLowerCase().trim();
+  const engine = ['auto', 'trellis', 'hunyuan', 'tripo'].includes(requestedEngine)
+    ? requestedEngine
+    : 'auto';
   const imageInput = String(image_data_url || image_url || '').trim();
 
   try {
@@ -261,9 +310,49 @@ exports.generateFromImage = async (req, res) => {
       body.file = { type: ext, url: imageInput };
     }
 
-    const createRes = await axios.post(`${TRIPO_API_BASE}/task`, body, {
-      headers: tripoHeaders(),
-    });
+    let createRes;
+    try {
+      createRes = await axios.post(`${TRIPO_API_BASE}/task`, body, {
+        headers: tripoHeaders(),
+      });
+    } catch (tripoErr) {
+      const tripoMsg = tripoErr.response?.data?.message || tripoErr.message || '';
+      const tripoCode = tripoErr.response?.data?.code;
+      if (tripoCode === 2010 || /credit/i.test(tripoMsg)) {
+        console.warn('[Tripo] Account balance 0. Falling back to free Auto engine (TRELLIS)...');
+        const taskId = `auto_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const task = await Tripo3DTask.create({
+          userId: req.user._id,
+          taskId,
+          prompt: 'Image-to-3D (Auto Fallback)',
+          tripoApiKind: 'image_to_model',
+          status: 'QUEUED',
+          engine: 'auto',
+        });
+        dispatchGeneration({
+          engine: 'auto',
+          imageInput,
+          taskId,
+          updateTask: async (fields) => {
+            await Tripo3DTask.updateOne({ taskId }, { $set: fields });
+          },
+        });
+        const creditsRemaining = await getCreditsRemaining(req.user._id);
+        return res.status(201).json({
+          message: 'Tripo credits unavailable. Switched to Free Auto 3D engine.',
+          creditsCharged: 0,
+          creditsRemaining,
+          task: {
+            _id: task._id,
+            taskId: task.taskId,
+            prompt: task.prompt,
+            status: task.status,
+            createdAt: task.createdAt,
+          },
+        });
+      }
+      throw tripoErr;
+    }
 
     const data = createRes.data?.data || createRes.data;
     const newTaskId = data.task_id || data.taskId;

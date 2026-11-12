@@ -34,7 +34,9 @@ function createApp() {
   app.get('/health', (req, res) => {
     res.json({
       status: 'OK',
-      message: 'Tripo API Backend is running',
+      message: 'Pixora 3D Backend is running',
+      version: '1.2.0-multi-engine',
+      supportedEngines: ['auto', 'trellis', 'hunyuan', 'tripo'],
       timestamp: new Date().toISOString(),
     });
   });
