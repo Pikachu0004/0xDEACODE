@@ -131,30 +131,37 @@ async function runWaveSpeedGeneration({ prompt, imageInput, taskId, updateTask }
       throw new Error('WaveSpeed task timed out before completing.');
     }
 
-    console.log(`[WaveSpeed] Model generated. Downloading: ${modelRemoteUrl}`);
+    console.log(`[WaveSpeed] Model generated successfully: ${modelRemoteUrl}`);
     await updateTask({ progress: 95, status: 'RUNNING' });
 
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    // Optional background local disk cache (non-fatal if it fails)
+    try {
+      if (!fs.existsSync(UPLOAD_DIR)) {
+        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      }
+      const destGlbPath = path.join(UPLOAD_DIR, `${taskId}.glb`);
+      const glbRes = await axios.get(modelRemoteUrl, {
+        responseType: 'arraybuffer',
+        timeout: 90000,
+      });
+      fs.writeFileSync(destGlbPath, Buffer.from(glbRes.data));
+    } catch (cacheErr) {
+      console.warn('[WaveSpeed] Local cache write skipped (non-fatal):', cacheErr.message);
     }
 
-    const destGlbPath = path.join(UPLOAD_DIR, `${taskId}.glb`);
-    const glbRes = await axios.get(modelRemoteUrl, {
-      responseType: 'arraybuffer',
-      timeout: 90000,
-    });
-    fs.writeFileSync(destGlbPath, Buffer.from(glbRes.data));
-
-    const glbServeUrl = `/uploads/ar/${taskId}.glb`;
-
+    // Set modelUrls.glb to the permanent, highly-available cloud CDN URL
     await updateTask({
       progress: 100,
       status: 'SUCCESS',
-      modelUrls: { glb: glbServeUrl },
+      modelUrls: {
+        glb: modelRemoteUrl,
+        originalUrl: modelRemoteUrl,
+        source: modelRemoteUrl,
+      },
       completedAt: new Date(),
     });
 
-    return glbServeUrl;
+    return modelRemoteUrl;
   } catch (err) {
     console.error(`[WaveSpeed] Task ${taskId} error:`, err);
     throw err;

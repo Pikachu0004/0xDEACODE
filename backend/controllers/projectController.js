@@ -282,9 +282,19 @@ exports.getPublicShare = async (req, res) => {
     }
 
     const filePath = arGlbFilePath(id);
+    let hasLocalFile = false;
     try {
       await fs.access(filePath);
+      hasLocalFile = true;
     } catch {
+      hasLocalFile = false;
+    }
+
+    const remoteUrl =
+      (doc.modelUrl && doc.modelUrl.startsWith('http') && !doc.modelUrl.includes('/api/projects/share/') ? doc.modelUrl : null) ||
+      (doc.modelUrls?.glb && doc.modelUrls.glb.startsWith('http') && !doc.modelUrls.glb.includes('/api/projects/share/') ? doc.modelUrls.glb : null);
+
+    if (!hasLocalFile && !remoteUrl) {
       return res.status(404).json({ message: 'Published model not available' });
     }
 
@@ -300,7 +310,7 @@ exports.getPublicShare = async (req, res) => {
       arCtaLabel: cta || 'View in your space',
       arAccentHex: doc.arAccentHex ? String(doc.arAccentHex).trim() : '',
       description: doc.description ? String(doc.description).slice(0, 2000) : '',
-      modelUrl: `/api/projects/share/${id}/model.glb`,
+      modelUrl: hasLocalFile ? `/api/projects/share/${id}/model.glb` : remoteUrl,
       capabilities: doc.capabilities || {},
       interactiveParts: doc.interactiveParts || {},
     });
@@ -323,17 +333,25 @@ exports.streamShareModel = async (req, res) => {
     const filePath = arGlbFilePath(id);
     try {
       await fs.access(filePath);
+      res.setHeader('Content-Type', 'model/gltf-binary');
+      res.setHeader('Content-Disposition', 'inline; filename="experience.glb"');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+
+      console.info('[projects] share model served from disk', { projectId: id });
+      return res.sendFile(filePath);
     } catch {
+      // Local file missing (e.g. Render restarted container) — check remote URL
+      const remoteUrl =
+        (doc.modelUrl && doc.modelUrl.startsWith('http') && !doc.modelUrl.includes('/api/projects/share/') ? doc.modelUrl : null) ||
+        (doc.modelUrls?.glb && doc.modelUrls.glb.startsWith('http') && !doc.modelUrls.glb.includes('/api/projects/share/') ? doc.modelUrls.glb : null);
+
+      if (remoteUrl) {
+        console.info('[projects] share model redirected to remote URL', { projectId: id, remoteUrl });
+        return res.redirect(302, remoteUrl);
+      }
       return res.status(404).json({ message: 'Not found' });
     }
-
-    res.setHeader('Content-Type', 'model/gltf-binary');
-    res.setHeader('Content-Disposition', 'inline; filename="experience.glb"');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
-    console.info('[projects] share model served', { projectId: id });
-    return res.sendFile(filePath);
   } catch (e) {
     console.error('streamShareModel', e);
     res.status(500).json({ message: 'Failed to serve model' });

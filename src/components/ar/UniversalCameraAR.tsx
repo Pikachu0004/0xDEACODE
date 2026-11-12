@@ -712,3 +712,4 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     </div>
   );
 }
+

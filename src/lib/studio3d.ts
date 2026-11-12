@@ -56,8 +56,12 @@ export async function loadGltfMeshyWithAnimations(
   url: string,
   token: string | null | undefined
 ): Promise<GltfLoadResult> {
-  if (!EXTERNAL_CDN.test(url)) {
-    return loadGltfWithAnimations(url);
+  if (!url.includes('assets.meshy.ai')) {
+    try {
+      return await loadGltfWithAnimations(url);
+    } catch (e) {
+      console.warn('[studio3d] Direct load failed, attempting proxy fallback:', e);
+    }
   }
 
   const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {

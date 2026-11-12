@@ -100,20 +100,19 @@ export default function ARViewer() {
     shareMeta?.modelUrl,
   ]);
 
-  /** Local / data URLs work immediately; Meshy CDN needs proxy + blob. */
+  /** Local, backend, and standard CDN URLs work directly; only Meshy needs proxy + blob. */
   const directModelUrl = useMemo(() => {
     if (!rawModelUrl) return null;
-    return EXTERNAL_CDN.test(rawModelUrl) ? null : rawModelUrl;
+    return rawModelUrl.includes('assets.meshy.ai') ? null : rawModelUrl;
   }, [rawModelUrl]);
 
   /** Meshy `assets.meshy.ai` URLs are blocked by CORS — fetch via API and use a blob URL for `<model-viewer>`. */
   useEffect(() => {
     setMeshyLoadError(null);
-    if (!rawModelUrl || !EXTERNAL_CDN.test(rawModelUrl)) {
+    if (!rawModelUrl || !rawModelUrl.includes('assets.meshy.ai')) {
       setMeshyBlobUrl(null);
       return;
     }
-
 
     setMeshyLoading(true);
     let blobUrl: string | null = null;
@@ -138,8 +137,8 @@ export default function ARViewer() {
         setMeshyBlobUrl(blobUrl);
       } catch (e) {
         if (!cancelled) {
-          setMeshyLoadError((e as Error).message || 'Could not load model');
-          setMeshyBlobUrl(null);
+          console.warn('[ARViewer] Proxy failed, falling back to direct URL:', e);
+          setMeshyBlobUrl(rawModelUrl);
         }
       } finally {
         if (!cancelled) setMeshyLoading(false);

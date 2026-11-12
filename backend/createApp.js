@@ -25,6 +25,26 @@ function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+  // Fallback for uploaded assets missing from disk after container rebuilds
+  app.get('/uploads/ar/:filename', async (req, res, next) => {
+    try {
+      const filename = req.params.filename;
+      const taskIdOrId = filename.replace(/\.glb$/, '');
+      const Tripo3DTask = require('./models/Tripo3DTask');
+      const task = await Tripo3DTask.findOne({ taskId: taskIdOrId }).lean();
+      const remoteUrl =
+        task?.modelUrls?.source ||
+        task?.modelUrls?.originalUrl ||
+        (task?.modelUrls?.glb?.startsWith('http') && !task.modelUrls.glb.includes('/uploads/ar/')
+          ? task.modelUrls.glb
+          : null);
+      if (remoteUrl) {
+        return res.redirect(302, remoteUrl);
+      }
+    } catch (_) {}
+    next();
+  });
+
   app.use('/api/auth', authRoutes);
   app.use('/api/tripo', tripoRoutes);
   app.use('/api/projects', projectRoutes);

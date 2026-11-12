@@ -49,8 +49,7 @@ export async function fetchGlbArrayBufferForPublish(params: {
       'This model uses a temporary browser link — open AR Studio, export, and publish, or regenerate the model.'
     );
   }
-  if (EXTERNAL_CDN.test(url)) {
-
+  if (url.includes('assets.meshy.ai')) {
     const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
       method: 'POST',
       headers: {
@@ -64,7 +63,25 @@ export async function fetchGlbArrayBufferForPublish(params: {
     }
     return res.arrayBuffer();
   }
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not download model (${res.status})`);
-  return res.arrayBuffer();
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Could not download model (${res.status})`);
+    return await res.arrayBuffer();
+  } catch (directErr) {
+    // If direct fetch fails (e.g. CORS), attempt proxy fallback
+    try {
+      const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+      if (res.ok) {
+        return await res.arrayBuffer();
+      }
+    } catch (_) {}
+    throw directErr;
+  }
 }

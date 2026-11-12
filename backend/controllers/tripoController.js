@@ -1,5 +1,8 @@
+const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 const Tripo3DTask = require('../models/Tripo3DTask');
+const { UPLOAD_DIR } = require('../utils/arGlbPaths');
 const { assertCanAfford, deductCredits, getCreditsRemaining, previewCost, refineCost } = require('../utils/credits');
 const { dispatchGeneration } = require('../services/autoGeneratorService');
 
@@ -520,6 +523,47 @@ exports.proxyAsset = async (req, res) => {
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname;
+
+    // Handle local upload paths e.g. https://.../uploads/ar/xxxx.glb
+    if (parsed.pathname && parsed.pathname.includes('/uploads/ar/')) {
+      const filename = path.basename(parsed.pathname);
+      const localFilePath = path.join(UPLOAD_DIR, filename);
+
+      if (fs.existsSync(localFilePath)) {
+        res.setHeader('Content-Type', 'model/gltf-binary');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return fs.createReadStream(localFilePath).pipe(res);
+      }
+
+      // If local file was deleted after a dyno restart, check if task has cloud URL in DB
+      const taskId = filename.replace(/\.glb$/, '');
+      const task = await Tripo3DTask.findOne({ taskId }).lean();
+      const fallbackUrl =
+        task?.modelUrls?.source ||
+        task?.modelUrls?.originalUrl ||
+        (task?.modelUrls?.glb?.startsWith('http') && !task.modelUrls.glb.includes('/uploads/ar/')
+          ? task.modelUrls.glb
+          : null);
+
+      if (fallbackUrl) {
+        const streamRes = await axios({
+          method: 'GET',
+          url: fallbackUrl,
+          responseType: 'stream',
+          timeout: 45000,
+        });
+        const contentType = streamRes.headers['content-type'] || 'model/gltf-binary';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return streamRes.data.pipe(res);
+      }
+
+      return res.status(404).json({
+        message: 'The requested 3D asset file is no longer available on disk. Please generate a new model.',
+        error: 'File not found on ephemeral server storage',
+      });
+    }
+
     // Basic SSRF protection — block local network
     if (
       hostname === 'localhost' ||
@@ -538,14 +582,19 @@ exports.proxyAsset = async (req, res) => {
       method: 'GET',
       url,
       responseType: 'stream',
+      timeout: 60000,
     });
     const contentType = response.headers['content-type'];
     if (contentType) {
       res.setHeader('Content-Type', contentType);
     }
+    res.setHeader('Access-Control-Allow-Origin', '*');
     response.data.pipe(res);
   } catch (error) {
     console.error('Proxy Asset Error:', error.message);
-    res.status(error.response?.status || 500).json({ message: 'Failed to fetch asset', error: error.message });
+    res.status(error.response?.status || 500).json({
+      message: 'Failed to fetch asset',
+      error: error.message,
+    });
   }
 };
