@@ -21,6 +21,10 @@ const tripo3DTaskSchema = new mongoose.Schema(
       enum: ['text_to_model', 'image_to_model'],
       default: 'text_to_model',
     },
+    engine: {
+      type: String,
+      default: 'tripo',
+    },
     status: {
       type: String,
       enum: ['QUEUED', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'EXPIRED', 'PENDING', 'IN_PROGRESS', 'SUCCEEDED'],

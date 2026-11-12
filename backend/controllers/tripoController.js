@@ -1,6 +1,7 @@
 const axios = require('axios');
 const Tripo3DTask = require('../models/Tripo3DTask');
 const { assertCanAfford, deductCredits, getCreditsRemaining, previewCost, refineCost } = require('../utils/credits');
+const { runHunyuanGeneration } = require('../services/hunyuanService');
 
 const TRIPO_API_BASE = process.env.TRIPO_API_URL || 'https://api.tripo3d.ai/v2/openapi';
 
@@ -42,13 +43,49 @@ function mapPolyToTarget(poly) {
   return 30000;
 }
 
-// POST /api/tripo/generate — Tripo text-to-3d
+// POST /api/tripo/generate — Tripo / Hunyuan text-to-3d
 exports.generate3DModel = async (req, res) => {
-  const { prompt, target_polycount, poly_budget } = req.body || {};
+  const { prompt, target_polycount, poly_budget, engine = 'tripo' } = req.body || {};
 
   try {
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ message: 'Prompt is required' });
+    }
+
+    if (engine === 'hunyuan') {
+      const taskId = `hy_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const task = await Tripo3DTask.create({
+        userId: req.user._id,
+        taskId,
+        prompt: prompt.trim().slice(0, 600),
+        tripoApiKind: 'text_to_model',
+        status: 'QUEUED',
+        engine: 'hunyuan',
+      });
+
+      // Run generation in background
+      runHunyuanGeneration({
+        prompt: task.prompt,
+        taskId,
+        updateTask: async (fields) => {
+          await Tripo3DTask.updateOne({ taskId }, { $set: fields });
+        },
+      });
+
+      const creditsRemaining = await getCreditsRemaining(req.user._id);
+
+      return res.status(201).json({
+        message: '3D model task created (Hunyuan3D Free)',
+        creditsCharged: 0,
+        creditsRemaining,
+        task: {
+          _id: task._id,
+          taskId: task.taskId,
+          prompt: task.prompt,
+          status: task.status,
+          createdAt: task.createdAt,
+        },
+      });
     }
 
     const charge = previewCost() + refineCost(); // Tripo does a full model generation
@@ -112,14 +149,50 @@ exports.generate3DModel = async (req, res) => {
   }
 };
 
-// POST /api/tripo/generate-from-image — Tripo image-to-3d
+// POST /api/tripo/generate-from-image — Tripo / Hunyuan image-to-3d
 exports.generateFromImage = async (req, res) => {
-  const { image_url, image_data_url, poly_budget, target_polycount } = req.body || {};
+  const { image_url, image_data_url, poly_budget, target_polycount, engine = 'tripo' } = req.body || {};
   const imageInput = String(image_data_url || image_url || '').trim();
 
   try {
     if (!imageInput) {
       return res.status(400).json({ message: 'image_data_url or image_url is required' });
+    }
+
+    if (engine === 'hunyuan') {
+      const taskId = `hy_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const task = await Tripo3DTask.create({
+        userId: req.user._id,
+        taskId,
+        prompt: 'Image-to-3D (Hunyuan3D)',
+        tripoApiKind: 'image_to_model',
+        status: 'QUEUED',
+        engine: 'hunyuan',
+      });
+
+      // Run generation in background
+      runHunyuanGeneration({
+        imageInput,
+        taskId,
+        updateTask: async (fields) => {
+          await Tripo3DTask.updateOne({ taskId }, { $set: fields });
+        },
+      });
+
+      const creditsRemaining = await getCreditsRemaining(req.user._id);
+
+      return res.status(201).json({
+        message: '3D model task created (Hunyuan3D Free)',
+        creditsCharged: 0,
+        creditsRemaining,
+        task: {
+          _id: task._id,
+          taskId: task.taskId,
+          prompt: task.prompt,
+          status: task.status,
+          createdAt: task.createdAt,
+        },
+      });
     }
 
     const charge = previewCost() + refineCost();
@@ -241,6 +314,26 @@ exports.getTaskStatus = async (req, res) => {
     const task = await Tripo3DTask.findOne({ taskId, userId: req.user._id });
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Hunyuan3D tasks are managed internally in DB
+    if (task.engine === 'hunyuan' || task.taskId.startsWith('hy_')) {
+      return res.json({
+        task: {
+          _id: task._id,
+          taskId: task.taskId,
+          prompt: task.prompt,
+          tripoApiKind: task.tripoApiKind,
+          status: task.status,
+          progress: task.progress,
+          modelUrls: task.modelUrls,
+          thumbnailUrl: task.thumbnailUrl,
+          videoUrl: task.videoUrl,
+          errorMessage: task.errorMessage,
+          createdAt: task.createdAt,
+          completedAt: task.completedAt,
+        },
+      });
     }
 
     const statusRes = await axios.get(`${TRIPO_API_BASE}/task/${encodeURIComponent(taskId)}`, {

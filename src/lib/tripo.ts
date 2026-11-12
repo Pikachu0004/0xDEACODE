@@ -3,7 +3,11 @@ import { useAppStore } from '../store/useAppStore';
 
 export type { TripoTaskPayload };
 
-export async function createTripoTextTask(prompt: string, poly: 'low' | 'medium' | 'high') {
+export async function createTripoTextTask(
+  prompt: string,
+  poly: 'low' | 'medium' | 'high',
+  engine: 'tripo' | 'hunyuan' = 'tripo'
+) {
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');
 
@@ -13,13 +17,18 @@ export async function createTripoTextTask(prompt: string, poly: 'low' | 'medium'
     body: JSON.stringify({
       prompt: prompt.trim().slice(0, 600),
       poly_budget: poly,
+      engine,
     }),
   });
 
   return res.task.taskId;
 }
 
-export async function createTripoImageTask(imageDataUrl: string, poly: 'low' | 'medium' | 'high') {
+export async function createTripoImageTask(
+  imageDataUrl: string,
+  poly: 'low' | 'medium' | 'high',
+  engine: 'tripo' | 'hunyuan' = 'tripo'
+) {
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');
 
@@ -29,6 +38,7 @@ export async function createTripoImageTask(imageDataUrl: string, poly: 'low' | '
     body: JSON.stringify({
       image_data_url: imageDataUrl,
       poly_budget: poly,
+      engine,
     }),
   });
 

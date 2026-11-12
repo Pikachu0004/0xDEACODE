@@ -30,6 +30,7 @@ import { ProjectChatCreditsDialog } from '../components/projectchat/ProjectChatC
 import { ProjectChatHireDialog } from '../components/projectchat/ProjectChatHireDialog';
 import {
   apiFetch,
+  apiUrl,
   type ChatListResponse,
 } from '../lib/api';
 import { isMongoObjectId } from '../lib/mongoId';
@@ -103,7 +104,7 @@ export default function ProjectChat() {
   /** Staged reference image for Tripo image-to-3D (data URL). */
   const [stagedImage, setStagedImage] = useState<string | null>(null);
   const [meshyProgress, setMeshyProgress] = useState(0);
-  const [selectedProvider, setSelectedProvider] = useState('Tripo AI');
+  const [selectedProvider, setSelectedProvider] = useState('Hunyuan3D (Free)');
   const [isProviderOpen, setIsProviderOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -131,7 +132,8 @@ export default function ProjectChat() {
   const currentMessages = chatHistory[id || ''] || [];
 
   const providers = [
-    { name: 'Tripo AI', icon: Sparkles, desc: 'AI-generated 3D models from text or images' },
+    { name: 'Tripo AI', icon: Sparkles, desc: 'Commercial 3D engine (Requires Tripo Credits)' },
+    { name: 'Hunyuan3D (Free)', icon: Box, desc: 'Tencent Open-Source 3D Engine (100% Free)' },
     { name: 'Hyper3D', icon: Box, desc: 'Fastest text-to-3D generation' },
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
     { name: 'Telles AI', icon: RefreshCw, desc: 'Microsoft Research 3D engine' },
@@ -248,43 +250,50 @@ export default function ProjectChat() {
     if (!input.trim() || isGenerating) return;
 
     const currentInput = input.trim();
-    const tripoLabel = selectedProvider === 'Tripo AI' ? 'Tripo · 3D model' : '';
+    const isHunyuan = selectedProvider === 'Hunyuan3D (Free)';
+    const isTripo = selectedProvider === 'Tripo AI';
+    const isAiEngine = isTripo || isHunyuan;
+    const engine = isHunyuan ? 'hunyuan' : 'tripo';
+    const engineLabel = isHunyuan ? 'Hunyuan3D' : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
       role: 'user',
-      content: tripoLabel
-        ? `[${tripoLabel} · ${gen.poly} poly] ${currentInput}`
+      content: isAiEngine
+        ? `[${engineLabel} · 3D model · ${gen.poly} poly] ${currentInput}`
         : `[${gen.poly} poly · ${gen.imageCount} images · ${gen.modelCount} model(s)] ${currentInput}`,
     };
     addChatMessage(id!, userMessage);
     setInput('');
     setIsGenerating(true);
 
-    const useTripo = selectedProvider === 'Tripo AI';
-
-    if (useTripo) {
+    if (isAiEngine) {
       try {
         setMeshyProgress(0);
 
-
-        const taskId = await createTripoTextTask(currentInput, gen.poly);
+        const taskId = await createTripoTextTask(currentInput, gen.poly, engine);
         const finalTask: TripoTaskPayload = await pollTripoTask(taskId, currentInput, {
           onProgress: (n) => setMeshyProgress(n),
         });
 
-        const finalGlb = finalTask.modelUrls?.glb;
+        let finalGlb = finalTask.modelUrls?.glb;
         if (!finalGlb) {
-          throw new Error('Tripo finished but did not return a GLB URL.');
+          throw new Error(`${engineLabel} finished but did not return a GLB URL.`);
+        }
+        if (finalGlb.startsWith('/')) {
+          finalGlb = apiUrl(finalGlb);
         }
 
-        const urls = compactModelUrls(finalTask.modelUrls);
+        const urls = compactModelUrls({
+          ...finalTask.modelUrls,
+          glb: finalGlb,
+        });
 
         const aiMessage: ChatMessage = {
           id: Math.random().toString(36).substr(2, 9),
           role: 'assistant',
           content:
-            `Tripo: model ready for “${currentInput.slice(0, 72)}${currentInput.length > 72 ? '...' : ''}”. Open in AR Studio or publish to WebAR.`,
+            `${engineLabel}: model ready for “${currentInput.slice(0, 72)}${currentInput.length > 72 ? '...' : ''}”. Open in AR Studio or publish to WebAR.`,
           modelUrl: finalGlb,
           modelUrls: urls,
           tripoTaskId: finalTask.taskId,
@@ -301,11 +310,11 @@ export default function ProjectChat() {
         });
         openPostModelFlow(finalGlb);
       } catch (err) {
-        const msg = (err as Error).message || 'Tripo request failed';
+        const msg = (err as Error).message || `${engineLabel} request failed`;
         addChatMessage(id!, {
           id: Math.random().toString(36).substr(2, 9),
           role: 'assistant',
-          content: `Tripo error: ${msg}`,
+          content: `${engineLabel} error: ${msg}`,
         });
       } finally {
         setIsGenerating(false);
@@ -353,33 +362,45 @@ export default function ProjectChat() {
     }, 3000);
   };
 
-  /** Tripo image-to-3D using the staged browser data URL. */
+  /** Image-to-3D using staged browser data URL (Tripo or Hunyuan3D Free). */
   const handleGenerateFromImage = async () => {
-    if (!stagedImage || selectedProvider !== 'Tripo AI') return;
+    const isHunyuan = selectedProvider === 'Hunyuan3D (Free)';
+    const isTripo = selectedProvider === 'Tripo AI';
+    const isAiEngine = isTripo || isHunyuan;
+    if (!stagedImage || !isAiEngine) return;
+
+    const engine = isHunyuan ? 'hunyuan' : 'tripo';
+    const engineLabel = isHunyuan ? 'Hunyuan3D' : 'Tripo';
 
     setIsGenerating(true);
     setMeshyProgress(0);
     try {
-      const taskId = await createTripoImageTask(stagedImage, gen.poly);
+      const taskId = await createTripoImageTask(stagedImage, gen.poly, engine);
       addChatMessage(id!, {
         id: Math.random().toString(36).substr(2, 9),
         role: 'user',
-        content: `[Tripo · image → 3D · ${gen.poly} poly]`,
+        content: `[${engineLabel} · image → 3D · ${gen.poly} poly]`,
       });
       const finalTask = await pollTripoTask(taskId, '[image-to-3d]', {
         onProgress: (n) => setMeshyProgress(n),
       });
-      const finalGlb = finalTask.modelUrls?.glb;
+      let finalGlb = finalTask.modelUrls?.glb;
       if (!finalGlb) {
-        throw new Error('Tripo finished but no GLB URL was returned yet.');
+        throw new Error(`${engineLabel} finished but no GLB URL was returned yet.`);
+      }
+      if (finalGlb.startsWith('/')) {
+        finalGlb = apiUrl(finalGlb);
       }
       void refreshUser();
-      const urls = compactModelUrls(finalTask.modelUrls);
+      const urls = compactModelUrls({
+        ...finalTask.modelUrls,
+        glb: finalGlb,
+      });
       addChatMessage(id!, {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
         content:
-          'Tripo: 3D model from your image is ready. Open in AR Studio or publish to WebAR.',
+          `${engineLabel}: 3D model from your image is ready. Open in AR Studio or publish to WebAR.`,
         modelUrl: finalGlb,
         modelUrls: urls,
         tripoTaskId: finalTask.taskId,
@@ -398,7 +419,7 @@ export default function ProjectChat() {
       addChatMessage(id!, {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: `Tripo error: ${(err as Error).message || 'Image-to-3D failed'}`,
+        content: `${engineLabel} error: ${(err as Error).message || 'Image-to-3D failed'}`,
       });
     } finally {
       setIsGenerating(false);
@@ -860,12 +881,12 @@ export default function ProjectChat() {
                     <span className="text-sm text-white/40 italic">
                       {isGenerating3D
                         ? `Building GLB (${gen.poly})…`
-                        : isGenerating && selectedProvider === 'Tripo AI'
-                          ? 'Meshy is generating your 3D model…'
+                        : isGenerating && (selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)')
+                          ? `${selectedProvider === 'Hunyuan3D (Free)' ? 'Hunyuan3D (Free)' : 'Tripo'} is generating your 3D model…`
                           : `${selectedProvider} is thinking…`}
                     </span>
                   </div>
-                  {isGenerating && selectedProvider === 'Tripo AI' && meshyProgress > 0 ? (
+                  {isGenerating && (selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)') && meshyProgress > 0 ? (
                     <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-brand-primary to-teal-400 transition-all duration-300"
@@ -883,7 +904,7 @@ export default function ProjectChat() {
 
         <div className="p-6 md:p-8 border-t border-white/5 bg-black/40 backdrop-blur-xl">
           <div className="max-w-3xl mx-auto">
-            {selectedProvider === 'Tripo AI' && stagedImage ? (
+            {(selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)') && stagedImage ? (
               <div className="mb-4 flex flex-col sm:flex-row gap-4 items-start rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                 <img
                   src={stagedImage}
@@ -1007,7 +1028,7 @@ export default function ProjectChat() {
                   onClick={() => imageInputRef.current?.click()}
                   className="p-3 md:p-4 text-white/30 hover:text-brand-primary transition-colors rounded-full hover:bg-white/5 shrink-0"
                   title={
-                    selectedProvider === 'Tripo AI'
+                    selectedProvider === 'Tripo AI' || selectedProvider === 'Hunyuan3D (Free)'
                       ? 'Attach image for image-to-3D (preview above, then Generate)'
                       : 'Attach image'
                   }
