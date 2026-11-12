@@ -10,11 +10,8 @@ import {
   ZapOff,
   Check,
   Loader2,
-  Move,
   Maximize2,
   AlertTriangle,
-  Lock,
-  Unlock,
   Footprints,
   Target,
 } from 'lucide-react';
@@ -73,7 +70,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const modelGroupRef = useRef<THREE.Group | null>(null);
   const modelMeshRootRef = useRef<THREE.Group | null>(null);
-  const reticleRef = useRef<THREE.Mesh | null>(null);
+  const reticleRef = useRef<THREE.Group | null>(null);
   const shadowMeshRef = useRef<THREE.Mesh | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
   const groundPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
@@ -113,8 +110,9 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
   const [modelLoading, setModelLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
 
-  // Anchoring state: When true, the model is locked in physical 3D world space
-  const [isAnchored, setIsAnchored] = useState(false);
+  // Auto-lock state: true whenever finger is released (model is locked in physical 3D world space)
+  const [isDraggingModel, setIsDraggingModel] = useState(false);
+  const [isAutoLocked, setIsAutoLocked] = useState(true);
 
   // Gyroscope state
   const [gyroSupported, setGyroSupported] = useState(false);
@@ -287,7 +285,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
 
   // 6. Auto-hide help toast
   useEffect(() => {
-    const timer = setTimeout(() => setShowHelpToast(false), 7000);
+    const timer = setTimeout(() => setShowHelpToast(false), 6000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -351,14 +349,14 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     scene.add(shadowMesh);
     shadowMeshRef.current = shadowMesh;
 
-    // F. Placement Target Reticle
+    // F. Placement Target Reticle (only shows while finger is actively dragging)
     const reticleGroup = new THREE.Group();
     const outerRingGeo = new THREE.RingGeometry(0.3, 0.33, 40);
     const outerRingMat = new THREE.MeshBasicMaterial({
       color: 0x10b981,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
     });
     const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
     outerRing.rotation.x = -Math.PI / 2;
@@ -376,8 +374,9 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     reticleGroup.add(innerDot);
 
     reticleGroup.position.set(0, 0.001, -2.0);
+    reticleGroup.visible = false; // Hidden when locked
     scene.add(reticleGroup);
-    reticleRef.current = reticleGroup as any;
+    reticleRef.current = reticleGroup;
 
     // G. Model Group (Anchored in physical 3D world space)
     const modelGroup = new THREE.Group();
@@ -443,9 +442,9 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       animFrameRef.current = requestAnimationFrame(renderLoop);
       const elapsed = clock.getElapsedTime();
 
-      // Pulse holographic reticle when in placement mode
-      if (reticleRef.current) {
-        const s = 1 + Math.sin(elapsed * 4) * 0.06;
+      // Pulse reticle when dragging
+      if (reticleRef.current && reticleRef.current.visible) {
+        const s = 1 + Math.sin(elapsed * 5) * 0.08;
         reticleRef.current.scale.set(s, s, s);
       }
 
@@ -485,14 +484,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     };
   }, [modelUrl, gyroEnabled, gyroSupported]);
 
-  // Update reticle visibility based on anchor state
-  useEffect(() => {
-    if (reticleRef.current) {
-      reticleRef.current.visible = !isAnchored;
-    }
-  }, [isAnchored]);
-
-  // Touch Controls: Move, Pinch-Scale, Twist-Rotate
+  // Touch Controls: Move, Pinch-Scale, Twist-Rotate with Instant AUTO-LOCK on release
   const handleTouchStart = (e: React.TouchEvent) => {
     if (needsMotionPermission) {
       requestMotionPermission();
@@ -502,6 +494,12 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       touchStateRef.current.isDragging = true;
       touchStateRef.current.lastX = e.touches[0].clientX;
       touchStateRef.current.lastY = e.touches[0].clientY;
+      setIsDraggingModel(true);
+
+      // Show reticle while dragging
+      if (reticleRef.current) {
+        reticleRef.current.visible = true;
+      }
     } else if (e.touches.length === 2 && modelGroupRef.current) {
       touchStateRef.current.isDragging = false;
       const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -518,55 +516,41 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
 
     if (e.touches.length === 1 && touchStateRef.current.isDragging) {
       const touch = e.touches[0];
-      const deltaX = touch.clientX - touchStateRef.current.lastX;
-      const deltaY = touch.clientY - touchStateRef.current.lastY;
       touchStateRef.current.lastX = touch.clientX;
       touchStateRef.current.lastY = touch.clientY;
 
-      if (!isAnchored) {
-        // Placement Mode: Raycast touch position onto floor plane to place object
-        const rect = containerRef.current.getBoundingClientRect();
-        const ndcX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        const ndcY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+      // Raycast touch position directly onto floor plane (Y = 0)
+      const rect = containerRef.current.getBoundingClientRect();
+      const ndcX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
-        raycasterRef.current.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraRef.current);
-        const intersection = new THREE.Vector3();
-        raycasterRef.current.ray.intersectPlane(groundPlaneRef.current, intersection);
+      raycasterRef.current.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraRef.current);
+      const intersection = new THREE.Vector3();
+      raycasterRef.current.ray.intersectPlane(groundPlaneRef.current, intersection);
 
-        if (intersection) {
-          // Clamp placement distance so it stays within room bounds (0.5m to 6m)
-          const dist = Math.hypot(intersection.x, intersection.z);
-          if (dist > 0.4 && dist < 8.0) {
-            modelGroupRef.current.position.x = intersection.x;
-            modelGroupRef.current.position.z = intersection.z;
+      if (intersection) {
+        // Clamp placement distance so it stays within room bounds (0.4m to 8m)
+        const dist = Math.hypot(intersection.x, intersection.z);
+        if (dist > 0.35 && dist < 10.0) {
+          modelGroupRef.current.position.x = intersection.x;
+          modelGroupRef.current.position.z = intersection.z;
 
-            if (reticleRef.current) {
-              reticleRef.current.position.x = intersection.x;
-              reticleRef.current.position.z = intersection.z;
-            }
-            if (shadowMeshRef.current) {
-              shadowMeshRef.current.position.x = intersection.x;
-              shadowMeshRef.current.position.z = intersection.z;
-            }
-            if (dirLightRef.current) {
-              dirLightRef.current.position.set(intersection.x + 2, 6, intersection.z + 1);
-            }
+          if (reticleRef.current) {
+            reticleRef.current.position.x = intersection.x;
+            reticleRef.current.position.z = intersection.z;
           }
-        }
-      } else {
-        // Anchored Mode: Object is locked in place!
-        // If gyro is off, single-finger drag allows manual camera panning
-        if (!gyroEnabled || !gyroSupported) {
-          manualYawRef.current -= deltaX * 0.005;
-          manualPitchRef.current = THREE.MathUtils.clamp(
-            manualPitchRef.current - deltaY * 0.005,
-            -Math.PI / 3,
-            Math.PI / 3
-          );
+          if (shadowMeshRef.current) {
+            shadowMeshRef.current.position.x = intersection.x;
+            shadowMeshRef.current.position.z = intersection.z;
+          }
+          if (dirLightRef.current) {
+            dirLightRef.current.position.set(intersection.x + 2, 6, intersection.z + 1);
+          }
+          setCameraDistance(parseFloat(dist.toFixed(1)));
         }
       }
-    } else if (e.touches.length === 2 && !isAnchored) {
-      // Two fingers in Placement Mode: Pinch-to-scale & Twist-to-rotate
+    } else if (e.touches.length === 2) {
+      // Two fingers: Pinch-to-scale & Twist-to-rotate
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const currentDist = Math.hypot(dx, dy);
@@ -588,8 +572,17 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     }
   };
 
+  // Instant AUTO-LOCK on Finger Release:
+  // Wherever you leave the model, it automatically locks firmly into that 3D spot in the room!
   const handleTouchEnd = () => {
     touchStateRef.current.isDragging = false;
+    setIsDraggingModel(false);
+    setIsAutoLocked(true);
+
+    // Hide reticle so only realistic model + floor shadow remain visible
+    if (reticleRef.current) {
+      reticleRef.current.visible = false;
+    }
   };
 
   // Adjust Scale via Slider or Preset
@@ -600,7 +593,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     }
   };
 
-  // Adjust Distance / Step Closer or Back
+  // Adjust Distance / Step Closer or Back in the room
   const adjustDistance = (delta: number) => {
     if (!modelGroupRef.current) return;
     const currentDist = Math.hypot(
@@ -635,12 +628,13 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     }
     if (reticleRef.current) {
       reticleRef.current.position.set(0, 0.001, -2.0);
+      reticleRef.current.visible = false;
     }
     if (shadowMeshRef.current) {
       shadowMeshRef.current.position.set(0, -0.005, -2.0);
     }
     recalibrateHeading();
-    setIsAnchored(false);
+    setIsAutoLocked(true);
   };
 
   // Capture AR Snapshot Photo (Camera Feed + 3D Model Composite)
@@ -760,8 +754,8 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
               {title || 'AR Camera View'}
             </h2>
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold uppercase tracking-widest drop-shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {isAnchored ? '🔒 Anchored in Room' : '✋ Adjusting Position'}
+              <span className={`w-2 h-2 rounded-full ${isDraggingModel ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}`} />
+              {isDraggingModel ? '✋ Moving to Spot…' : '📍 Auto-Locked in Room'}
             </div>
           </div>
         </div>
@@ -845,17 +839,8 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       {/* Floating Instructions Toast */}
       {showHelpToast && !modelLoading && (
         <div className="relative z-30 mx-auto max-w-sm px-4 py-2.5 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-white/90 text-xs font-medium flex items-center gap-2.5 shadow-2xl animate-fade-in pointer-events-auto">
-          {isAnchored ? (
-            <>
-              <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Model anchored! Turn your phone to view from any angle.</span>
-            </>
-          ) : (
-            <>
-              <Move className="w-4 h-4 text-emerald-400 shrink-0 animate-bounce" />
-              <span>Drag to position on floor • Tap “Lock in Place” when set</span>
-            </>
-          )}
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span>Drag to place anywhere • Auto-locks instantly when you release</span>
           <button
             onClick={() => setShowHelpToast(false)}
             className="ml-auto text-white/40 hover:text-white"
@@ -867,86 +852,57 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
 
       {/* 4. Bottom Controls & Action Bar */}
       <footer className="relative z-30 p-4 sm:p-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col gap-3 pointer-events-auto">
-        {/* Placement vs Anchored Controls */}
-        {!isAnchored ? (
-          /* When in Placement Mode: Scale & Lock */
-          <div className="space-y-3">
-            {/* Scale Presets */}
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 mr-1 flex items-center gap-1">
-                <Maximize2 className="w-3 h-3" /> Size:
-              </span>
-              {[
-                { label: '50%', value: 0.5 },
-                { label: '100% (Real)', value: 1.0 },
-                { label: '150%', value: 1.5 },
-                { label: '200%', value: 2.0 },
-              ].map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => applyScale(preset.value)}
-                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
-                    Math.abs(currentScale - preset.value) < 0.1
-                      ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30'
-                      : 'bg-white/10 text-white/70 hover:bg-white/20 border border-white/10'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Lock in Place Primary Action */}
-            <div className="flex justify-center">
+        {/* Seamless Control Strip: Scale Presets & Distance Step */}
+        <div className="flex flex-wrap items-center justify-between max-w-md mx-auto w-full gap-2 px-1">
+          {/* Scale Presets */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 mr-0.5 flex items-center gap-1">
+              <Maximize2 className="w-3 h-3" /> Size:
+            </span>
+            {[
+              { label: '50%', value: 0.5 },
+              { label: '100%', value: 1.0 },
+              { label: '150%', value: 1.5 },
+              { label: '200%', value: 2.0 },
+            ].map((preset) => (
               <button
-                onClick={() => {
-                  setIsAnchored(true);
-                  setShowHelpToast(true);
-                }}
-                className="px-6 py-2.5 rounded-full bg-emerald-500 text-black font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-emerald-500/40 hover:bg-emerald-400 active:scale-95 transition-all"
+                key={preset.label}
+                onClick={() => applyScale(preset.value)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
+                  Math.abs(currentScale - preset.value) < 0.1
+                    ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20 border border-white/10'
+                }`}
               >
-                <Lock className="w-4 h-4 fill-black" />
-                Lock in Place (Anchor to Room)
+                {preset.label}
               </button>
-            </div>
+            ))}
           </div>
-        ) : (
-          /* When Anchored in Physical Room: Walk distance & Unlock toggle */
-          <div className="flex items-center justify-between max-w-md mx-auto w-full px-2">
-            {/* Distance / Step Closer or Back */}
-            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15">
-              <Footprints className="w-3.5 h-3.5 text-emerald-400" />
-              <button
-                onClick={() => adjustDistance(-0.4)}
-                className="w-6 h-6 rounded-full bg-white/10 text-white flex items-center justify-center font-bold text-xs active:scale-90"
-                title="Step Closer"
-              >
-                -
-              </button>
-              <span className="text-[10px] font-bold text-white/90 px-1 tracking-wider">
-                {cameraDistance}m
-              </span>
-              <button
-                onClick={() => adjustDistance(0.4)}
-                className="w-6 h-6 rounded-full bg-white/10 text-white flex items-center justify-center font-bold text-xs active:scale-90"
-                title="Step Back"
-              >
-                +
-              </button>
-            </div>
 
-            {/* Unlock / Reposition Button */}
+          {/* Distance Stepper: Step Closer or Step Back */}
+          <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/15">
+            <Footprints className="w-3 h-3 text-emerald-400" />
             <button
-              onClick={() => setIsAnchored(false)}
-              className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/90 border border-white/15 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md active:scale-95 transition-all"
+              onClick={() => adjustDistance(-0.4)}
+              className="w-5 h-5 rounded-full bg-white/10 text-white flex items-center justify-center font-bold text-xs active:scale-90"
+              title="Step Closer"
             >
-              <Unlock className="w-3.5 h-3.5 text-amber-400" />
-              Reposition
+              -
+            </button>
+            <span className="text-[10px] font-bold text-white/90 px-1 tracking-wider">
+              {cameraDistance}m
+            </span>
+            <button
+              onClick={() => adjustDistance(0.4)}
+              className="w-5 h-5 rounded-full bg-white/10 text-white flex items-center justify-center font-bold text-xs active:scale-90"
+              title="Step Back"
+            >
+              +
             </button>
           </div>
-        )}
+        </div>
 
-        {/* Shutter and Action Toolbar */}
+        {/* Shutter and Primary Action Toolbar */}
         <div className="flex items-center justify-around max-w-md mx-auto w-full pt-1">
           {/* Reset position button */}
           <button
