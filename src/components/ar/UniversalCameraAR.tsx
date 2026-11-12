@@ -14,11 +14,19 @@ import {
   AlertTriangle,
   Footprints,
   Target,
+  Gamepad2,
+  Volume2,
+  VolumeX,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface UniversalCameraARProps {
   modelUrl: string;
   title?: string;
+  initialMotionMode?: boolean;
   onClose: () => void;
 }
 
@@ -59,7 +67,106 @@ function computeDeviceQuaternion(
   return q;
 }
 
-export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraARProps) {
+/**
+ * Procedural Web Audio API Engine Sound Synthesizer.
+ * Creates an authentic rumble and acceleration sound without external audio files.
+ */
+class ProceduralEngineSound {
+  private ctx: AudioContext | null = null;
+  private osc1: OscillatorNode | null = null;
+  private osc2: OscillatorNode | null = null;
+  private gain: GainNode | null = null;
+  private filter: BiquadFilterNode | null = null;
+  private isRunning = false;
+  private enabled = true;
+
+  public setEnabled(val: boolean) {
+    this.enabled = val;
+    if (!val && this.gain && this.ctx) {
+      this.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  public start() {
+    if (this.isRunning || !this.enabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      this.ctx = new AudioCtx();
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+
+      // Rich engine harmonic rumble
+      this.osc1 = this.ctx.createOscillator();
+      this.osc1.type = 'sawtooth';
+      this.osc1.frequency.setValueAtTime(55, this.ctx.currentTime); // 55Hz idle
+
+      // Deep sub-bass thrum
+      this.osc2 = this.ctx.createOscillator();
+      this.osc2.type = 'triangle';
+      this.osc2.frequency.setValueAtTime(27.5, this.ctx.currentTime);
+
+      // Lowpass filter for engine block resonance
+      this.filter = this.ctx.createBiquadFilter();
+      this.filter.type = 'lowpass';
+      this.filter.frequency.setValueAtTime(240, this.ctx.currentTime);
+
+      this.gain = this.ctx.createGain();
+      this.gain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+
+      this.osc1.connect(this.filter);
+      this.osc2.connect(this.filter);
+      this.filter.connect(this.gain);
+      this.gain.connect(this.ctx.destination);
+
+      this.osc1.start();
+      this.osc2.start();
+      this.isRunning = true;
+    } catch (e) {
+      console.warn('Procedural engine sound error:', e);
+    }
+  }
+
+  public setThrottle(speed: number) {
+    if (!this.isRunning || !this.ctx || !this.osc1 || !this.gain || !this.filter || !this.enabled) return;
+    try {
+      const now = this.ctx.currentTime;
+      const absSpeed = Math.abs(speed);
+      if (absSpeed > 0.05) {
+        const freq = 55 + absSpeed * 95;
+        this.osc1.frequency.setTargetAtTime(freq, now, 0.08);
+        if (this.osc2) this.osc2.frequency.setTargetAtTime(freq * 0.5, now, 0.08);
+        this.filter.frequency.setTargetAtTime(360, now, 0.1);
+        this.gain.gain.setTargetAtTime(0.18, now, 0.06);
+      } else {
+        this.osc1.frequency.setTargetAtTime(55, now, 0.15);
+        if (this.osc2) this.osc2.frequency.setTargetAtTime(27.5, now, 0.15);
+        this.filter.frequency.setTargetAtTime(240, now, 0.15);
+        this.gain.gain.setTargetAtTime(0.05, now, 0.12);
+      }
+    } catch (_) {}
+  }
+
+  public stop() {
+    if (!this.isRunning) return;
+    try {
+      this.gain?.gain.setValueAtTime(0, this.ctx?.currentTime || 0);
+      this.osc1?.stop();
+      this.osc2?.stop();
+      this.ctx?.close();
+    } catch (_) {}
+    this.isRunning = false;
+    this.ctx = null;
+  }
+}
+
+export function UniversalCameraAR({
+  modelUrl,
+  title,
+  initialMotionMode = false,
+  onClose,
+}: UniversalCameraARProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,6 +191,13 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
   const currentAlphaRef = useRef<number>(0);
   const manualYawRef = useRef<number>(0);
   const manualPitchRef = useRef<number>(0);
+
+  // Motion / Drive controls state
+  const [isMotionMode, setIsMotionMode] = useState(initialMotionMode);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const driveVelocityRef = useRef<{ forward: number; turn: number }>({ forward: 0, turn: 0 });
+  const engineAudioRef = useRef<ProceduralEngineSound>(new ProceduralEngineSound());
+  const vibratePulseRef = useRef<any>(null);
 
   // Touch tracking state
   const touchStateRef = useRef<{
@@ -112,7 +226,6 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
 
   // Auto-lock state: true whenever finger is released (model is locked in physical 3D world space)
   const [isDraggingModel, setIsDraggingModel] = useState(false);
-  const [isAutoLocked, setIsAutoLocked] = useState(true);
 
   // Gyroscope state
   const [gyroSupported, setGyroSupported] = useState(false);
@@ -188,8 +301,15 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       if (stream) {
         stream.getTracks().forEach((t) => t.stop());
       }
+      engineAudioRef.current.stop();
+      if (vibratePulseRef.current) clearInterval(vibratePulseRef.current);
     };
   }, []);
+
+  // Sync sound toggle with engine audio
+  useEffect(() => {
+    engineAudioRef.current.setEnabled(soundEnabled);
+  }, [soundEnabled]);
 
   // 2. iOS Motion Permission Check & Request
   useEffect(() => {
@@ -340,7 +460,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
     dirLightRef.current = dirLight;
 
     // E. Realistic Soft Floor Shadow Receiver
-    const shadowGeo = new THREE.PlaneGeometry(25, 25);
+    const shadowGeo = new THREE.PlaneGeometry(35, 35);
     const shadowMat = new THREE.ShadowMaterial({ opacity: 0.42 });
     const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
     shadowMesh.rotation.x = -Math.PI / 2;
@@ -435,11 +555,12 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       }
     );
 
-    // I. Animation & Render Loop
+    // I. Animation & Render Loop (Handles 360 gyro camera & driving physics)
     let clock = new THREE.Clock();
 
     function renderLoop() {
       animFrameRef.current = requestAnimationFrame(renderLoop);
+      const delta = clock.getDelta();
       const elapsed = clock.getElapsedTime();
 
       // Pulse reticle when dragging
@@ -448,12 +569,51 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
         reticleRef.current.scale.set(s, s, s);
       }
 
+      // 1. Motion Mode Driving Physics (Car Movement on Real Floor)
+      if (isMotionMode && modelGroupRef.current) {
+        // Steer rotation around Y axis
+        if (driveVelocityRef.current.turn !== 0) {
+          modelGroupRef.current.rotation.y += driveVelocityRef.current.turn * 2.2 * delta;
+        }
+
+        // Drive forward/backward in the direction the object is facing
+        if (driveVelocityRef.current.forward !== 0) {
+          const speed = driveVelocityRef.current.forward * 1.8 * delta; // 1.8 m/s speed
+          const forwardVec = new THREE.Vector3(0, 0, -1).applyAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            modelGroupRef.current.rotation.y
+          );
+          modelGroupRef.current.position.addScaledVector(forwardVec, speed);
+
+          // Floor shadow follows underneath the moving object
+          if (shadowMeshRef.current) {
+            shadowMeshRef.current.position.x = modelGroupRef.current.position.x;
+            shadowMeshRef.current.position.z = modelGroupRef.current.position.z;
+          }
+
+          // Lighting follows the object
+          if (dirLightRef.current) {
+            dirLightRef.current.position.set(
+              modelGroupRef.current.position.x + 2,
+              6,
+              modelGroupRef.current.position.z + 1
+            );
+          }
+
+          // Update distance readout
+          const curDist = Math.hypot(
+            modelGroupRef.current.position.x,
+            modelGroupRef.current.position.z
+          );
+          setCameraDistance(parseFloat(curDist.toFixed(1)));
+        }
+      }
+
+      // 2. Camera Orientation (Smooth Slerp matching Phone's Gyroscope)
       if (cameraRef.current) {
         if (gyroEnabled && gyroSupported) {
-          // Smoothly interpolate camera orientation towards target phone angle
           cameraRef.current.quaternion.slerp(targetQuaternionRef.current, 0.18);
         } else {
-          // Fallback manual orientation (Euler yaw/pitch)
           const euler = new THREE.Euler(manualPitchRef.current, manualYawRef.current, 0, 'YXZ');
           cameraRef.current.quaternion.setFromEuler(euler);
         }
@@ -482,7 +642,70 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       renderer.dispose();
       scene.clear();
     };
-  }, [modelUrl, gyroEnabled, gyroSupported]);
+  }, [modelUrl, gyroEnabled, gyroSupported, isMotionMode]);
+
+  // Handle Driving Inputs (Forward, Backward, Left, Right) with Real Engine Sound & Phone Vibration
+  const startDrive = (forward: number, turn: number) => {
+    driveVelocityRef.current = { forward, turn };
+
+    // Start procedural engine sound & rev up throttle
+    engineAudioRef.current.start();
+    engineAudioRef.current.setThrottle(forward !== 0 ? forward : turn !== 0 ? 0.35 : 0);
+
+    // Trigger physical phone vibration
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(40);
+      if (!vibratePulseRef.current && forward !== 0) {
+        vibratePulseRef.current = setInterval(() => {
+          if (navigator.vibrate) navigator.vibrate(35);
+        }, 110);
+      }
+    }
+  };
+
+  const stopDrive = (type: 'forward' | 'turn' | 'all') => {
+    if (type === 'forward' || type === 'all') {
+      driveVelocityRef.current.forward = 0;
+      if (vibratePulseRef.current) {
+        clearInterval(vibratePulseRef.current);
+        vibratePulseRef.current = null;
+      }
+    }
+    if (type === 'turn' || type === 'all') {
+      driveVelocityRef.current.turn = 0;
+    }
+
+    // Drop engine sound back to idle
+    if (driveVelocityRef.current.forward === 0 && driveVelocityRef.current.turn === 0) {
+      engineAudioRef.current.setThrottle(0);
+    }
+  };
+
+  // Keyboard controls for Motion Mode (W, A, S, D / Arrow keys)
+  useEffect(() => {
+    if (!isMotionMode) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (['w', 'ArrowUp'].includes(e.key)) startDrive(1, driveVelocityRef.current.turn);
+      if (['s', 'ArrowDown'].includes(e.key)) startDrive(-1, driveVelocityRef.current.turn);
+      if (['a', 'ArrowLeft'].includes(e.key)) startDrive(driveVelocityRef.current.forward, 1);
+      if (['d', 'ArrowRight'].includes(e.key)) startDrive(driveVelocityRef.current.forward, -1);
+    }
+
+    function handleKeyUp(e: KeyboardEvent) {
+      if (['w', 's', 'ArrowUp', 'ArrowDown'].includes(e.key)) stopDrive('forward');
+      if (['a', 'd', 'ArrowLeft', 'ArrowRight'].includes(e.key)) stopDrive('turn');
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      stopDrive('all');
+    };
+  }, [isMotionMode]);
 
   // Touch Controls: Move, Pinch-Scale, Twist-Rotate with Instant AUTO-LOCK on release
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -531,7 +754,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       if (intersection) {
         // Clamp placement distance so it stays within room bounds (0.4m to 8m)
         const dist = Math.hypot(intersection.x, intersection.z);
-        if (dist > 0.35 && dist < 10.0) {
+        if (dist > 0.35 && dist < 12.0) {
           modelGroupRef.current.position.x = intersection.x;
           modelGroupRef.current.position.z = intersection.z;
 
@@ -577,7 +800,6 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
   const handleTouchEnd = () => {
     touchStateRef.current.isDragging = false;
     setIsDraggingModel(false);
-    setIsAutoLocked(true);
 
     // Hide reticle so only realistic model + floor shadow remain visible
     if (reticleRef.current) {
@@ -600,7 +822,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       modelGroupRef.current.position.x,
       modelGroupRef.current.position.z
     ) || 2.0;
-    const targetDist = THREE.MathUtils.clamp(currentDist + delta, 0.8, 5.0);
+    const targetDist = THREE.MathUtils.clamp(currentDist + delta, 0.8, 6.0);
     const ratio = targetDist / currentDist;
 
     modelGroupRef.current.position.x *= ratio;
@@ -634,7 +856,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       shadowMeshRef.current.position.set(0, -0.005, -2.0);
     }
     recalibrateHeading();
-    setIsAutoLocked(true);
+    stopDrive('all');
   };
 
   // Capture AR Snapshot Photo (Camera Feed + 3D Model Composite)
@@ -740,8 +962,8 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       )}
 
       {/* 3. Top Header Bar */}
-      <header className="relative z-30 p-4 sm:p-6 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-auto">
-        <div className="flex items-center gap-3">
+      <header className="relative z-30 p-3 sm:p-5 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-auto">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={onClose}
             className="p-2.5 rounded-full bg-black/60 backdrop-blur-md text-white/90 border border-white/15 hover:bg-white/10 active:scale-95 transition-all shadow-lg"
@@ -755,20 +977,49 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
             </h2>
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold uppercase tracking-widest drop-shadow-sm">
               <span className={`w-2 h-2 rounded-full ${isDraggingModel ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}`} />
-              {isDraggingModel ? '✋ Moving to Spot…' : '📍 Auto-Locked in Room'}
+              {isDraggingModel ? '✋ Moving to Spot…' : isMotionMode ? '🚗 Driving Active' : '📍 Auto-Locked in Room'}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Motion Mode Toggle */}
+          <button
+            onClick={() => {
+              const next = !isMotionMode;
+              setIsMotionMode(next);
+              if (!next) stopDrive('all');
+            }}
+            className={`px-3 py-2 rounded-full text-xs font-bold backdrop-blur-md border transition-all flex items-center gap-1.5 active:scale-95 shadow-lg ${
+              isMotionMode
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black border-emerald-400'
+                : 'bg-black/60 text-white/80 border-white/15 hover:bg-white/10'
+            }`}
+            title="Toggle Driving Motion Mode"
+          >
+            <Gamepad2 className="w-3.5 h-3.5 fill-current" />
+            <span className="text-[10px] uppercase tracking-wider">{isMotionMode ? 'Driving ON' : 'Motion'}</span>
+          </button>
+
+          {/* Sound Toggle (in motion mode) */}
+          {isMotionMode && (
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`p-2 rounded-full backdrop-blur-md border transition-all active:scale-95 ${
+                soundEnabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-black/60 text-white/50 border-white/15'
+              }`}
+              title="Toggle Engine Sound"
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+          )}
+
           {/* Torch Toggle */}
           {torchSupported && (
             <button
               onClick={toggleTorch}
-              className={`p-2.5 rounded-full backdrop-blur-md border transition-all active:scale-95 ${
-                torchOn
-                  ? 'bg-amber-400 text-black border-amber-300'
-                  : 'bg-black/60 text-white/80 border-white/15'
+              className={`p-2 rounded-full backdrop-blur-md border transition-all active:scale-95 ${
+                torchOn ? 'bg-amber-400 text-black border-amber-300' : 'bg-black/60 text-white/80 border-white/15'
               }`}
               title="Toggle Flashlight"
             >
@@ -779,7 +1030,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
           {/* Calibrate / Re-center Heading */}
           <button
             onClick={recalibrateHeading}
-            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md text-white/80 border border-white/15 hover:bg-white/10 active:scale-95 transition-all"
+            className="p-2 rounded-full bg-black/60 backdrop-blur-md text-white/80 border border-white/15 hover:bg-white/10 active:scale-95 transition-all"
             title="Re-center Forward View"
           >
             <Compass className="w-4 h-4 text-emerald-400" />
@@ -788,15 +1039,12 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
           {/* Gyroscope Room Tracking Toggle */}
           <button
             onClick={() => setGyroEnabled(!gyroEnabled)}
-            className={`px-3 py-2 rounded-full text-xs font-bold backdrop-blur-md border transition-all flex items-center gap-1.5 active:scale-95 ${
-              gyroEnabled
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                : 'bg-black/60 text-white/50 border-white/15'
+            className={`p-2 rounded-full backdrop-blur-md border transition-all active:scale-95 ${
+              gyroEnabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-black/60 text-white/50 border-white/15'
             }`}
-            title="Toggle Room Tracking"
+            title="Toggle 360 Room Tracking"
           >
-            <Target className={`w-3.5 h-3.5 ${gyroEnabled ? 'text-emerald-400' : 'text-white/40'}`} />
-            <span className="text-[10px] uppercase tracking-wider">360° {gyroEnabled ? 'ON' : 'OFF'}</span>
+            <Target className="w-4 h-4 text-emerald-400" />
           </button>
         </div>
       </header>
@@ -840,7 +1088,11 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
       {showHelpToast && !modelLoading && (
         <div className="relative z-30 mx-auto max-w-sm px-4 py-2.5 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-white/90 text-xs font-medium flex items-center gap-2.5 shadow-2xl animate-fade-in pointer-events-auto">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span>Drag to place anywhere • Auto-locks instantly when you release</span>
+          <span>
+            {isMotionMode
+              ? 'Use Left & Right thumbs to steer and drive with real sound & vibration!'
+              : 'Drag to place anywhere • Auto-locks instantly when you release'}
+          </span>
           <button
             onClick={() => setShowHelpToast(false)}
             className="ml-auto text-white/40 hover:text-white"
@@ -850,8 +1102,85 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
         </div>
       )}
 
-      {/* 4. Bottom Controls & Action Bar */}
-      <footer className="relative z-30 p-4 sm:p-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col gap-3 pointer-events-auto">
+      {/* 4. Motion Mode Driving Controller Overlay (Forward, Backward, Left, Right) */}
+      {isMotionMode && (
+        <div className="relative z-30 px-4 py-2 flex items-center justify-between max-w-lg mx-auto w-full pointer-events-auto select-none">
+          {/* Steering Controls (Left Thumb): Turn Left (◀) & Turn Right (▶) */}
+          <div className="flex items-center gap-2.5 bg-black/60 backdrop-blur-xl p-2 rounded-3xl border border-white/15 shadow-2xl">
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                startDrive(driveVelocityRef.current.forward, 1);
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                stopDrive('turn');
+              }}
+              onPointerLeave={() => stopDrive('turn')}
+              className="w-14 h-14 rounded-2xl bg-white/10 hover:bg-emerald-500/20 active:bg-emerald-500 text-white active:text-black flex flex-col items-center justify-center border border-white/15 active:scale-90 transition-all shadow-lg active:shadow-emerald-500/50"
+              title="Steer Left"
+            >
+              <ChevronLeft className="w-7 h-7 stroke-[2.5]" />
+              <span className="text-[8px] font-bold uppercase tracking-wider">Left</span>
+            </button>
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                startDrive(driveVelocityRef.current.forward, -1);
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                stopDrive('turn');
+              }}
+              onPointerLeave={() => stopDrive('turn')}
+              className="w-14 h-14 rounded-2xl bg-white/10 hover:bg-emerald-500/20 active:bg-emerald-500 text-white active:text-black flex flex-col items-center justify-center border border-white/15 active:scale-90 transition-all shadow-lg active:shadow-emerald-500/50"
+              title="Steer Right"
+            >
+              <ChevronRight className="w-7 h-7 stroke-[2.5]" />
+              <span className="text-[8px] font-bold uppercase tracking-wider">Right</span>
+            </button>
+          </div>
+
+          {/* Drive Throttle Controls (Right Thumb): Forward (▲) & Backward (▼) */}
+          <div className="flex items-center gap-2.5 bg-black/60 backdrop-blur-xl p-2 rounded-3xl border border-white/15 shadow-2xl">
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                startDrive(-1, driveVelocityRef.current.turn);
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                stopDrive('forward');
+              }}
+              onPointerLeave={() => stopDrive('forward')}
+              className="w-14 h-14 rounded-2xl bg-white/10 hover:bg-amber-500/20 active:bg-amber-400 text-white active:text-black flex flex-col items-center justify-center border border-white/15 active:scale-90 transition-all shadow-lg active:shadow-amber-500/50"
+              title="Drive Backward"
+            >
+              <ChevronDown className="w-7 h-7 stroke-[2.5]" />
+              <span className="text-[8px] font-bold uppercase tracking-wider">Back</span>
+            </button>
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                startDrive(1, driveVelocityRef.current.turn);
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                stopDrive('forward');
+              }}
+              onPointerLeave={() => stopDrive('forward')}
+              className="w-14 h-14 rounded-2xl bg-emerald-500/30 hover:bg-emerald-500/50 active:bg-emerald-400 text-white active:text-black flex flex-col items-center justify-center border border-emerald-500/40 active:scale-90 transition-all shadow-xl active:shadow-emerald-500/60"
+              title="Drive Forward"
+            >
+              <ChevronUp className="w-7 h-7 stroke-[2.5]" />
+              <span className="text-[8px] font-bold uppercase tracking-wider">Drive</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Bottom Controls & Action Bar */}
+      <footer className="relative z-30 p-3 sm:p-5 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col gap-2.5 pointer-events-auto">
         {/* Seamless Control Strip: Scale Presets & Distance Step */}
         <div className="flex flex-wrap items-center justify-between max-w-md mx-auto w-full gap-2 px-1">
           {/* Scale Presets */}
@@ -861,7 +1190,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
             </span>
             {[
               { label: '50%', value: 0.5 },
-              { label: '100%', value: 1.0 },
+              { label: '100% (Real)', value: 1.0 },
               { label: '150%', value: 1.5 },
               { label: '200%', value: 2.0 },
             ].map((preset) => (
@@ -903,7 +1232,7 @@ export function UniversalCameraAR({ modelUrl, title, onClose }: UniversalCameraA
         </div>
 
         {/* Shutter and Primary Action Toolbar */}
-        <div className="flex items-center justify-around max-w-md mx-auto w-full pt-1">
+        <div className="flex items-center justify-around max-w-md mx-auto w-full pt-0.5">
           {/* Reset position button */}
           <button
             onClick={resetPosition}

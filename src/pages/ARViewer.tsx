@@ -13,11 +13,10 @@ import {
   ChevronRight,
   Info,
   Loader2,
-  Play,
+  Gamepad2,
   Camera,
 } from 'lucide-react';
 import { apiFetch, apiUrl, type PublicShareResponse } from '../lib/api';
-import { InteractiveARViewer } from '../components/ar/InteractiveARViewer';
 import { UniversalCameraAR } from '../components/ar/UniversalCameraAR';
 
 const ModelViewer = 'model-viewer' as any;
@@ -28,7 +27,7 @@ const EXTERNAL_CDN = /^https?:\/\/(?!localhost|127\.0\.0\.1)/i;
 export default function ARViewer() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const [isInteractiveMode, setIsInteractiveMode] = useState(false);
+  const [startInMotionMode, setStartInMotionMode] = useState(false);
   const [isCameraARActive, setIsCameraARActive] = useState(false);
   const location = useLocation();
   const { projects, user } = useAppStore();
@@ -237,14 +236,11 @@ export default function ARViewer() {
         <UniversalCameraAR
           modelUrl={modelUrlForViewer}
           title={title}
-          onClose={() => setIsCameraARActive(false)}
-        />
-      ) : null}
-      {isInteractiveMode && modelUrlForViewer ? (
-        <InteractiveARViewer 
-          project={project || (shareMeta ? { interactiveParts: shareMeta.interactiveParts, capabilities: shareMeta.capabilities } as any : undefined)} 
-          modelUrl={modelUrlForViewer} 
-          onExit={() => setIsInteractiveMode(false)} 
+          initialMotionMode={startInMotionMode}
+          onClose={() => {
+            setIsCameraARActive(false);
+            setStartInMotionMode(false);
+          }}
         />
       ) : null}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/5 bg-black/40 backdrop-blur-md z-10">
@@ -358,11 +354,15 @@ export default function ARViewer() {
               </div>
 
               <button
-                onClick={() => setIsInteractiveMode(true)}
-                className="absolute top-4 right-4 z-20 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-bold rounded-full shadow-lg flex items-center gap-2 transition-all"
+                type="button"
+                onClick={() => {
+                  setStartInMotionMode(true);
+                  setIsCameraARActive(true);
+                }}
+                className="absolute top-4 right-4 z-20 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black text-xs font-bold rounded-full shadow-xl flex items-center gap-2 transition-all active:scale-95 cursor-pointer uppercase tracking-wider"
               >
-                <Play className="w-4 h-4" />
-                Interactive Mode
+                <Gamepad2 className="w-4 h-4 fill-black" />
+                Motion (Drive)
               </button>
             </div>
           ) : !meshyLoading && !meshyLoadError && !modelUrlForViewer ? (
