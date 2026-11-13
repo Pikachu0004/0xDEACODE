@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const { UPLOAD_DIR } = require('../utils/arGlbPaths');
 const { extractModelUrlOrPath } = require('./hunyuanService');
+const { tryPrebuiltFallback } = require('../utils/prebuiltFallback');
 
 /**
  * Executes a 3D model generation task using OpenAI Shap-E.
@@ -138,7 +139,34 @@ async function runShapeGeneration({ prompt, imageInput, taskId, updateTask }) {
     console.log(`[Shap-E] Task ${taskId} successfully generated 3D model!`);
     return glbServeUrl;
   } catch (err) {
-    console.error(`[Shap-E] Task ${taskId} error:`, err);
+    console.warn(`[Shap-E] Task ${taskId} encountered error: ${err.message}. Checking prebuilt library...`);
+
+    // 1. If external Hugging Face ZeroGPU quota is exhausted, seamlessly fallback to prebuilt model if matched
+    const fallback = tryPrebuiltFallback(prompt, taskId);
+    if (fallback) {
+      console.log(`[Shap-E] Seamlessly served prebuilt 3D model "${fallback.name}" for task ${taskId}`);
+      await updateTask({
+        progress: 100,
+        status: 'SUCCESS',
+        modelUrls: {
+          glb: fallback.glbServeUrl,
+          originalUrl: fallback.glbServeUrl,
+          source: fallback.glbServeUrl,
+        },
+        thumbnailUrl: fallback.thumbnailUrl,
+        completedAt: new Date(),
+      });
+      return fallback.glbServeUrl;
+    }
+
+    // 2. If no prebuilt match and ZeroGPU quota is hit, provide clear actionable guidance
+    if (err.message && (err.message.includes('ZeroGPU quota') || err.message.includes('quota'))) {
+      const userFriendlyErr = new Error(
+        "Public Hugging Face ZeroGPU quota is temporarily full for the day. To generate without limits, switch to 'WaveSpeed AI' (uses your dedicated API key in Render), or choose an instant model (DTU Gate, Red Fort, Duck, Boat, Car) from the Instant 3D bar."
+      );
+      throw userFriendlyErr;
+    }
+
     throw err;
   } finally {
     if (tempImageFile && fs.existsSync(tempImageFile)) {

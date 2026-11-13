@@ -2,6 +2,7 @@ const { runWaveSpeedGeneration, getWaveSpeedKey } = require('./wavespeedService'
 const { runTrellisGeneration } = require('./trellisService');
 const { runHunyuanGeneration } = require('./hunyuanService');
 const { runShapeGeneration } = require('./shapeService');
+const { tryPrebuiltFallback } = require('../utils/prebuiltFallback');
 
 /**
  * Executes 3D model generation using either a specific engine
@@ -103,10 +104,32 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
     console.log(`[Auto 3D] OpenAI Shap-E succeeded for task ${taskId}!`);
     return;
   } catch (shapeErr) {
+    console.warn(`[Auto 3D] All AI engines failed (${shapeErr.message}). Checking offline prebuilt library...`);
+    const fallback = tryPrebuiltFallback(prompt, taskId);
+    if (fallback) {
+      console.log(`[Auto 3D] Successfully served prebuilt 3D model "${fallback.name}" for task ${taskId}`);
+      await updateTask({
+        progress: 100,
+        status: 'SUCCESS',
+        modelUrls: {
+          glb: fallback.glbServeUrl,
+          originalUrl: fallback.glbServeUrl,
+          source: fallback.glbServeUrl,
+        },
+        thumbnailUrl: fallback.thumbnailUrl,
+        completedAt: new Date(),
+      });
+      return;
+    }
+
     console.error(`[Auto 3D] All engines failed for task ${taskId}:`, shapeErr.message);
+    const friendlyMsg = shapeErr.message && shapeErr.message.includes('ZeroGPU quota')
+      ? "Public Hugging Face ZeroGPU quota is temporarily full for the day. To generate without limits, switch to 'WaveSpeed AI' (uses your dedicated API key in Render), or choose an instant model (DTU Gate, Red Fort, Duck, Boat, Car) from the Instant 3D bar."
+      : `Generation failed across available engines: ${shapeErr.message}`;
+
     await updateTask({
       status: 'FAILED',
-      errorMessage: `Generation failed across available engines: ${shapeErr.message}`,
+      errorMessage: friendlyMsg,
     });
   }
 }
