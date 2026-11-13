@@ -296,7 +296,7 @@ export interface Freelancer {
   avatar: string;
 }
 
-/** Single source of truth — backed by prebuilt models catalog with DTU Gate, Red Fort, Duck, Boat, etc. */
+/** Single source of truth — backed by prebuilt models catalog */
 export const DEFAULT_MARKETPLACE_ITEMS: MarketplaceItem[] = PREBUILT_MODELS.map((item) => ({
   id: item.id,
   name: item.name,
@@ -548,10 +548,13 @@ export const useAppStore = create<AppState>()(
         if (Array.isArray(merged.projects)) {
           merged.projects = merged.projects.map(sanitizeProjectBlobUrls);
         }
-        // Ensure default marketplace catalog items (DTU Gate, Red Fort, Duck, Boat, etc.) are always present
-        const persistedItems = Array.isArray(merged.marketplaceItems) ? merged.marketplaceItems : [];
+        // Ensure removed legacy catalog items are never resurrected from client localStorage
+        const removedIds = new Set(['m-dtu-gate', 'm-red-fort', 'm-boat']);
+        const persistedItems = (Array.isArray(merged.marketplaceItems) ? merged.marketplaceItems : []).filter(
+          (i) => !removedIds.has(i.id)
+        );
         merged.marketplaceItems = [
-          ...DEFAULT_MARKETPLACE_ITEMS,
+          ...DEFAULT_MARKETPLACE_ITEMS.filter((i) => !removedIds.has(i.id)),
           ...persistedItems.filter((i) => !DEFAULT_MARKETPLACE_ITEMS.some((d) => d.id === i.id)),
         ];
         return merged as AppState;

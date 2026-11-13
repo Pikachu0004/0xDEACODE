@@ -4,28 +4,10 @@ const { UPLOAD_DIR } = require('./arGlbPaths');
 
 const PREBUILT_CATALOG = [
   {
-    keywords: ['dtu', 'dce', 'delhi technological university', 'dtu gate'],
-    filename: 'dtu_gate.glb',
-    name: 'DTU Gate — Delhi Technological University (DCE)',
-    thumbnail: '/models/dtu_gate_thumb.jpg',
-  },
-  {
-    keywords: ['red fort', 'redfort', 'lal qila', 'delhi fort', 'qila'],
-    filename: 'red_fort.glb',
-    name: 'Red Fort (Lal Qila) — Delhi Monument',
-    thumbnail: '/models/red_fort_thumb.jpg',
-  },
-  {
     keywords: ['duck', 'rubber duck', 'yellow duck', 'bath duck'],
     filename: 'duck.glb',
     name: 'Yellow Rubber Duck',
     thumbnail: '/models/duck_thumb.png',
-  },
-  {
-    keywords: ['boat', 'speed boat', 'speedboat', 'ship', 'motorboat', 'yacht'],
-    filename: 'speed_boat.glb',
-    name: 'Speed Boat — Hydrofoil Racer',
-    thumbnail: '/models/speed_boat_thumb.jpg',
   },
   {
     keywords: ['car', 'lamborghini', 'lambo', 'sports car', 'huracan', 'vehicle', 'automobile'],

@@ -22,13 +22,13 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
     return;
   }
 
-  if (engine === 'sketchfab') {
+  if (engine === 'sketchfab' || engine === 'pixora') {
     try {
       await runSketchfabGeneration({ prompt, taskId, updateTask });
     } catch (err) {
       await updateTask({
         status: 'FAILED',
-        errorMessage: err.message || 'Sketchfab 3D import failed',
+        errorMessage: err.message || 'Pixora AI generation failed',
       });
     }
     return;
@@ -72,6 +72,20 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
 
   // Engine === 'auto': Smart Fallback
   console.log(`[Auto 3D] Starting Auto mode for task ${taskId}...`);
+
+  // For text-to-3D, always preference Pixora AI 3D library first!
+  if (prompt && !imageInput) {
+    try {
+      console.log(`[Auto 3D] Attempting Pixora AI library first...`);
+      await updateTask({ progress: 15, status: 'RUNNING' });
+      await runSketchfabGeneration({ prompt, taskId, updateTask });
+      console.log(`[Auto 3D] Pixora AI succeeded for task ${taskId}!`);
+      return;
+    } catch (pxErr) {
+      console.warn(`[Auto 3D] Pixora AI library attempt failed (${pxErr.message}). Falling back to WaveSpeed / neural diffusion...`);
+      await updateTask({ progress: 20, status: 'RUNNING' });
+    }
+  }
 
   // If user configured WAVESPEED_API_KEY in Render, prioritize WaveSpeed AI
   if (getWaveSpeedKey()) {
@@ -137,7 +151,7 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
 
     console.error(`[Auto 3D] All engines failed for task ${taskId}:`, shapeErr.message);
     const friendlyMsg = shapeErr.message && shapeErr.message.includes('ZeroGPU quota')
-      ? "Public Hugging Face ZeroGPU quota is temporarily full for the day. To generate without limits, switch to 'WaveSpeed AI' (uses your dedicated API key in Render), or choose an instant model (DTU Gate, Red Fort, Duck, Boat, Car) from the Instant 3D bar."
+      ? "Public Hugging Face ZeroGPU quota is temporarily full for the day. To generate without limits, switch to 'Pixora AI' or 'WaveSpeed AI' (uses your dedicated API key in Render), or choose an instant model (Duck, Car, Sneakers) from the Instant 3D bar."
       : `Generation failed across available engines: ${shapeErr.message}`;
 
     await updateTask({

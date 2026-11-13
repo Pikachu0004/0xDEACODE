@@ -10,20 +10,20 @@ function getSketchfabToken() {
     process.env.SKETCHFAB_API_TOKEN ||
     process.env.SKETCHFAB_TOKEN ||
     process.env.SKETCHFAB_API_KEY ||
+    process.env.PIXORA_API_TOKEN ||
     ''
   ).trim();
 }
 
 /**
- * Searches Sketchfab for free downloadable 3D models matching a prompt,
- * downloads the model archive, converts/extracts to a self-contained GLB,
- * and serves it for WebAR and AR Studio.
+ * Pixora AI 3D Generation Engine (backed by high-fidelity community 3D asset library)
+ * Downloads, converts glTF/GLB archives into self-contained WebAR/AR Studio GLB meshes.
  */
 async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
   const token = getSketchfabToken();
   if (!token) {
     throw new Error(
-      'SKETCHFAB_API_TOKEN is not configured in Render (or backend/.env). Please get your free API token from Sketchfab (Settings -> Password & API) and add it to your Environment Variables.'
+      'Pixora AI requires SKETCHFAB_API_TOKEN to be configured in Render (or backend/.env). Please set your token in Environment Variables.'
     );
   }
 
@@ -38,7 +38,7 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
     throw new Error('Search query is required.');
   }
 
-  console.log(`[Sketchfab] Searching for downloadable models matching "${cleanPrompt}"...`);
+  console.log(`[Pixora AI] Searching for 3D models matching "${cleanPrompt}"...`);
 
   // 1. Search for downloadable models sorted by community favorites
   let searchUrl = `https://api.sketchfab.com/v3/search?type=models&downloadable=true&q=${encodeURIComponent(cleanPrompt)}&sort_by=-likeCount`;
@@ -47,14 +47,14 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
   try {
     searchRes = await axios.get(searchUrl, { timeout: 15000 });
   } catch (err) {
-    console.warn('[Sketchfab] Search with likeCount failed, trying general search:', err.message);
+    console.warn('[Pixora AI] Search with likeCount failed, trying general search:', err.message);
     searchUrl = `https://api.sketchfab.com/v3/search?type=models&downloadable=true&q=${encodeURIComponent(cleanPrompt)}`;
     searchRes = await axios.get(searchUrl, { timeout: 15000 });
   }
 
   const results = searchRes.data?.results || [];
   if (results.length === 0) {
-    throw new Error(`No free downloadable 3D models found on Sketchfab for "${cleanPrompt}". Try a broader term (e.g., "dog", "keyboard", "car").`);
+    throw new Error(`Pixora AI: No 3D models found for "${cleanPrompt}". Try a broader term (e.g., "dog", "keyboard", "car", "chair").`);
   }
 
   const topMatch = results[0];
@@ -65,16 +65,16 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
     topMatch.thumbnails?.images?.[1]?.url ||
     undefined;
 
-  console.log(`[Sketchfab] Found top match: "${modelName}" (UID: ${modelUid})`);
+  console.log(`[Pixora AI] Found top match: "${modelName}" (UID: ${modelUid})`);
   await updateTask({
     progress: 35,
     status: 'RUNNING',
     thumbnailUrl: modelThumbnail,
   });
 
-  // 2. Request temporary signed download URL from Sketchfab API
+  // 2. Request temporary signed download URL
   const downloadApiUrl = `https://api.sketchfab.com/v3/models/${modelUid}/download`;
-  console.log(`[Sketchfab] Requesting download link for ${modelUid}...`);
+  console.log(`[Pixora AI] Requesting asset link for ${modelUid}...`);
 
   let downloadRes;
   try {
@@ -88,9 +88,9 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
     const status = dlErr.response?.status;
     const errorDetail = dlErr.response?.data?.detail || dlErr.message;
     if (status === 401 || status === 403) {
-      throw new Error(`Sketchfab authentication failed (${errorDetail}). Please check your SKETCHFAB_API_TOKEN in Render.`);
+      throw new Error(`Pixora AI authentication failed (${errorDetail}). Please check your SKETCHFAB_API_TOKEN in Render.`);
     }
-    throw new Error(`Sketchfab download request failed: ${errorDetail}`);
+    throw new Error(`Pixora AI download request failed: ${errorDetail}`);
   }
 
   const downloadData = downloadRes.data || {};
@@ -98,7 +98,7 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
   const gltfUrl = downloadData.gltf?.url;
 
   if (!glbUrl && !gltfUrl) {
-    throw new Error(`Model "${modelName}" does not have a downloadable GLB or glTF format available on Sketchfab.`);
+    throw new Error(`Model "${modelName}" does not have a downloadable 3D format available.`);
   }
 
   await updateTask({ progress: 60, status: 'RUNNING' });
@@ -109,7 +109,7 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
   try {
     if (glbUrl) {
       // Direct GLB download
-      console.log(`[Sketchfab] Downloading direct GLB from signed URL...`);
+      console.log(`[Pixora AI] Downloading direct GLB from signed URL...`);
       const glbStream = await axios.get(glbUrl, {
         responseType: 'arraybuffer',
         timeout: 90000,
@@ -117,7 +117,7 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
       fs.writeFileSync(destGlbPath, Buffer.from(glbStream.data));
     } else {
       // glTF zip archive download & conversion to self-contained GLB
-      console.log(`[Sketchfab] Downloading glTF archive and compiling to GLB...`);
+      console.log(`[Pixora AI] Downloading glTF archive and compiling to GLB...`);
       const zipStream = await axios.get(gltfUrl, {
         responseType: 'arraybuffer',
         timeout: 90000,
@@ -151,13 +151,13 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
       }
 
       if (!gltfFileName) {
-        throw new Error('Downloaded archive from Sketchfab does not contain a valid .gltf file.');
+        throw new Error('Downloaded archive does not contain a valid .gltf file.');
       }
 
       const gltfFilePath = path.join(gltfDir, gltfFileName);
       const gltfJson = JSON.parse(fs.readFileSync(gltfFilePath, 'utf8'));
 
-      console.log(`[Sketchfab] Converting ${gltfFileName} into binary GLB...`);
+      console.log(`[Pixora AI] Converting ${gltfFileName} into binary GLB...`);
       const glbResult = await gltfPipeline.gltfToGlb(gltfJson, {
         resourceDirectory: gltfDir,
       });
@@ -182,13 +182,13 @@ async function runSketchfabGeneration({ prompt, taskId, updateTask }) {
     modelUrls: {
       glb: glbServeUrl,
       originalUrl: glbServeUrl,
-      source: `https://sketchfab.com/3d-models/${modelUid}`,
+      source: glbServeUrl,
     },
     thumbnailUrl: modelThumbnail,
     completedAt: new Date(),
   });
 
-  console.log(`[Sketchfab] Model "${modelName}" successfully imported and ready as ${glbServeUrl}!`);
+  console.log(`[Pixora AI] Model "${modelName}" successfully generated and ready as ${glbServeUrl}!`);
   return glbServeUrl;
 }
 
@@ -196,3 +196,4 @@ module.exports = {
   runSketchfabGeneration,
   getSketchfabToken,
 };
+

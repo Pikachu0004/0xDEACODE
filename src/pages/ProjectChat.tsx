@@ -55,12 +55,11 @@ const MODEL_FOR_IMAGE: Record<string, string> = {
 };
 
 const SUGGESTED_PROMPTS = [
-  'DTU Gate — Delhi Technological University (DCE) campus entrance arch',
-  'Red Fort — Historic Lal Qila monumental sandstone citadel',
   'Yellow Duck — Classic rubber duck for tabletop AR testing',
-  'Speed Boat — Streamlined hydrofoil motorboat racer',
   'Sports Car — Showroom Huracán-class supercar with motion drive',
-  'Product hero: white sneakers on neutral studio — AR try-on for ecommerce',
+  'Diecast Toy Car — Vintage metallic collectible vehicle',
+  'Designer Sneakers — Modern streetwear sneakers for retail AR display',
+  'Product hero: futuristic quadcopter drone for AR showcase',
 ];
 
 function startSpeechRecognition(
@@ -110,7 +109,7 @@ export default function ProjectChat() {
   /** Staged reference image for Tripo image-to-3D (data URL). */
   const [stagedImage, setStagedImage] = useState<string | null>(null);
   const [meshyProgress, setMeshyProgress] = useState(0);
-  const [selectedProvider, setSelectedProvider] = useState('Auto (Best Free Engine)');
+  const [selectedProvider, setSelectedProvider] = useState('Pixora AI (Recommended)');
   const [isProviderOpen, setIsProviderOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -138,8 +137,8 @@ export default function ProjectChat() {
   const currentMessages = chatHistory[id || ''] || [];
 
   const providers = [
-    { name: 'Auto (Best Free Engine)', icon: Sparkles, desc: 'Tries WaveSpeed / fast low-quota engine first with auto-fallback' },
-    { name: 'Sketchfab 3D (Free Library)', icon: Globe, desc: 'Search & import free community 3D models from Sketchfab' },
+    { name: 'Pixora AI (Recommended)', icon: Sparkles, desc: 'Primary smart 3D engine with high-fidelity library' },
+    { name: 'Auto (Best Free Engine)', icon: Cpu, desc: 'Tries Pixora AI / fast low-quota engines with auto-fallback' },
     { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
     { name: 'OpenAI Shap-E (Free · Fast)', icon: Cpu, desc: 'Lightweight free Text-to-3D by OpenAI (MIT License)' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
@@ -149,9 +148,10 @@ export default function ProjectChat() {
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
   ];
 
-  const getEngineKey = (provider: string): 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
+  const getEngineKey = (provider: string): 'pixora' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
+    if (provider.startsWith('Pixora')) return 'pixora';
     if (provider.startsWith('Auto')) return 'auto';
-    if (provider.toLowerCase().includes('sketchfab')) return 'sketchfab';
+    if (provider.toLowerCase().includes('sketchfab')) return 'pixora';
     if (provider.startsWith('WaveSpeed')) return 'wavespeed';
     if (provider.toLowerCase().includes('shap-e') || provider.toLowerCase().includes('shape') || provider.startsWith('OpenAI')) return 'shape';
     if (provider.startsWith('TRELLIS')) return 'trellis';
@@ -272,7 +272,7 @@ export default function ProjectChat() {
 
     const currentInput = input.trim();
 
-    // Check if the input matches an iconic prebuilt 3D model (e.g. DTU Gate, Red Fort, Duck, Boat, Car)
+    // Check if the input matches an iconic prebuilt 3D model (e.g. Duck, Car, Sneakers)
     const matchedPrebuilt = matchPrebuiltModel(currentInput);
     if (matchedPrebuilt) {
       const userMessage: ChatMessage = {
@@ -317,19 +317,20 @@ export default function ProjectChat() {
 
     const engineKey = getEngineKey(selectedProvider);
     const isAiEngine = engineKey !== null;
-    const engineLabel = engineKey === 'auto'
-      ? 'Auto 3D'
-      : engineKey === 'sketchfab'
-        ? 'Sketchfab 3D'
-        : engineKey === 'wavespeed'
-          ? 'WaveSpeed AI'
-          : engineKey === 'shape'
-            ? 'OpenAI Shap-E'
-            : engineKey === 'trellis'
-              ? 'TRELLIS'
-              : engineKey === 'hunyuan'
-                ? 'Hunyuan3D'
-                : 'Tripo';
+    const engineLabel =
+      engineKey === 'pixora' || engineKey === 'sketchfab'
+        ? 'Pixora AI'
+        : engineKey === 'auto'
+          ? 'Pixora Auto'
+          : engineKey === 'wavespeed'
+            ? 'WaveSpeed AI'
+            : engineKey === 'shape'
+              ? 'OpenAI Shap-E'
+              : engineKey === 'trellis'
+                ? 'TRELLIS'
+                : engineKey === 'hunyuan'
+                  ? 'Hunyuan3D'
+                  : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -443,10 +444,10 @@ export default function ProjectChat() {
     if (!stagedImage || !engineKey) return;
 
     const engineLabel =
-      engineKey === 'auto'
-        ? 'Auto 3D'
-        : engineKey === 'sketchfab'
-          ? 'Sketchfab 3D'
+      engineKey === 'pixora' || engineKey === 'sketchfab'
+        ? 'Pixora AI'
+        : engineKey === 'auto'
+          ? 'Pixora Auto'
           : engineKey === 'wavespeed'
             ? 'WaveSpeed AI'
             : engineKey === 'shape'
@@ -967,8 +968,8 @@ export default function ProjectChat() {
                       {isGenerating3D
                         ? `Building GLB (${gen.poly})…`
                         : isGenerating && getEngineKey(selectedProvider) !== null
-                          ? `${selectedProvider} is generating your 3D model…`
-                          : `${selectedProvider} is thinking…`}
+                          ? `${selectedProvider.startsWith('Pixora') || selectedProvider.toLowerCase().includes('sketchfab') ? 'Pixora AI' : selectedProvider} is generating your 3D model…`
+                          : `${selectedProvider.startsWith('Pixora') || selectedProvider.toLowerCase().includes('sketchfab') ? 'Pixora AI' : selectedProvider} is thinking…`}
                     </span>
                   </div>
                   {isGenerating && getEngineKey(selectedProvider) !== null && meshyProgress > 0 ? (
@@ -1043,11 +1044,10 @@ export default function ProjectChat() {
                 Instant 3D:
               </span>
               {[
-                { label: '🏛️ DTU Gate', prompt: 'DTU Gate' },
-                { label: '🚩 Red Fort', prompt: 'Red Fort' },
                 { label: '🦆 Duck', prompt: 'Duck' },
-                { label: '🚤 Speed Boat', prompt: 'Speed Boat' },
                 { label: '🏎️ Sports Car', prompt: 'Sports Car' },
+                { label: '🧸 Toy Car', prompt: 'Toy Car' },
+                { label: '👟 Sneakers', prompt: 'Designer Sneakers' },
               ].map((badge) => (
                 <button
                   key={badge.label}

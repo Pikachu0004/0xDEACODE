@@ -162,7 +162,7 @@ async function runShapeGeneration({ prompt, imageInput, taskId, updateTask }) {
     // 2. If no prebuilt match and ZeroGPU quota is hit, provide clear actionable guidance
     if (err.message && (err.message.includes('ZeroGPU quota') || err.message.includes('quota'))) {
       const userFriendlyErr = new Error(
-        "Public Hugging Face ZeroGPU quota is temporarily full for the day. To generate without limits, switch to 'WaveSpeed AI' (uses your dedicated API key in Render), or choose an instant model (DTU Gate, Red Fort, Duck, Boat, Car) from the Instant 3D bar."
+        "Public Hugging Face ZeroGPU quota is temporarily full for the day. To generate without limits, switch to 'Pixora AI' or 'WaveSpeed AI' (uses your dedicated API key in Render), or choose an instant model (Duck, Car, Sneakers) from the Instant 3D bar."
       );
       throw userFriendlyErr;
     }

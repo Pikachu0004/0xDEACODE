@@ -14,52 +14,6 @@ export interface PrebuiltModelItem {
 
 export const PREBUILT_MODELS: PrebuiltModelItem[] = [
   {
-    id: 'm-dtu-gate',
-    name: 'DTU Gate — Delhi Technological University (DCE)',
-    keywords: [
-      'dtu',
-      'dce',
-      'delhi technological university',
-      'dtu gate',
-      'delhi college of engineering',
-      'dtu entrance',
-      'dtu campus',
-    ],
-    modelUrl: '/models/dtu_gate.glb',
-    thumbnailUrl: '/models/dtu_gate_thumb.jpg',
-    category: 'architecture',
-    price: 49,
-    creator: 'amankr010 · DTU 2K22',
-    rating: 5.0,
-    sales: 184,
-    description:
-      'Historic Delhi Technological University (DCE) main entrance gate with campus greenery, low-poly vehicle, and student character for realistic architectural scale.',
-  },
-  {
-    id: 'm-red-fort',
-    name: 'Red Fort (Lal Qila) — Delhi Monument',
-    keywords: [
-      'red fort',
-      'redfort',
-      'lal qila',
-      'lal qilla',
-      'lal kila',
-      'delhi fort',
-      'red fort delhi',
-      'qila',
-      'fort',
-    ],
-    modelUrl: '/models/red_fort.glb',
-    thumbnailUrl: '/models/red_fort_thumb.jpg',
-    category: 'architecture',
-    price: 69,
-    creator: 'VisiARise Heritage Labs',
-    rating: 4.95,
-    sales: 230,
-    description:
-      'Historic monumental Mughal red sandstone citadel with central Lahori Gate portal, octagonal bastion towers, white marble chhatris, and the Indian national flag.',
-  },
-  {
     id: 'm-duck',
     name: 'Yellow Rubber Duck — AR Classic',
     keywords: [
@@ -79,29 +33,6 @@ export const PREBUILT_MODELS: PrebuiltModelItem[] = [
     sales: 420,
     description:
       'The universal benchmark yellow rubber duck 3D asset. Optimized for instant loading, tabletop AR testing, bathtub physics, and driving controls.',
-  },
-  {
-    id: 'm-boat',
-    name: 'Speed Boat — Hydrofoil Racer',
-    keywords: [
-      'boat',
-      'speed boat',
-      'speedboat',
-      'ship',
-      'motorboat',
-      'yacht',
-      'watercraft',
-      'vessel',
-    ],
-    modelUrl: '/models/speed_boat.glb',
-    thumbnailUrl: '/models/speed_boat_thumb.jpg',
-    category: 'vehicles',
-    price: 59,
-    creator: 'VisiARise Marine',
-    rating: 4.85,
-    sales: 98,
-    description:
-      'High-speed aerodynamic motorboat vessel with streamlined hull, cockpit interior, and twin engine assemblies for WebAR marine visualization.',
   },
   {
     id: 'm-lambo',
@@ -261,7 +192,7 @@ export function matchPrebuiltModel(userInput: string): PrebuiltModelItem | null 
     }
   }
 
-  // 3. Substring check for short input (e.g. user typed "dtu" or "red fort")
+  // 3. Substring check for short input (e.g. user typed "car" or "duck")
   if (cleaned.length <= 40) {
     for (const item of PREBUILT_MODELS) {
       for (const kw of item.keywords) {
