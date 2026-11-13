@@ -84,7 +84,7 @@ async function checkThreeDaiWallet(apiKey) {
  * 2. GET /v1/generation-request/{task_id}/status/ -> polls until FINISHED
  * 3. Downloads GLB to /uploads/ar/{taskId}.glb
  */
-async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget = 'medium' }) {
+async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget = 'medium', subModel = 'trellis2' }) {
   const apiKey = getThreeDaiKey();
   if (!apiKey) {
     throw new Error(
@@ -115,17 +115,38 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     payload.image_url = imageInput;
   }
 
-  // Model endpoints prioritized by lowest credit cost on 3D AI Studio:
-  // 1. Trellis 2 (15 credits - lowest price, sharp geometry & PBR)
-  // 2. Tencent Rapid (20 credits - fast low-cost fallback)
-  // 3. Tencent Pro (40 credits)
-  // 4. Tripo (70 credits - high cost fallback)
-  const endpoints = [
-    `${THREEDAI_API_BASE}/v1/3d-models/trellis2/generate/`,
-    `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/rapid/`,
-    `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/pro/`,
-    `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
+  // Model endpoints mapping on 3D AI Studio with credit costs:
+  // - trellis2: ~15 credits (Budget pick, clean PBR)
+  // - hunyuan-rapid: ~20 credits (Fast production geometry)
+  // - hunyuan-pro: ~40 credits (Sharp edges, high-detail)
+  // - tripo-p1: ~60 credits (Fast game-ready)
+  // - tripo-p2: ~70 credits (Next-gen game-ready quad topology)
+  // - hitem3d: ~125 credits (Ultra-density watertight mesh)
+  const modelEndpointMap = {
+    'trellis2': `${THREEDAI_API_BASE}/v1/3d-models/trellis2/generate/`,
+    'hunyuan-rapid': `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/rapid/`,
+    'hunyuan-pro': `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/pro/`,
+    'tripo-p1': `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
+    'tripo-p2': `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
+    'hitem3d': `${THREEDAI_API_BASE}/v1/3d-models/hitem3d/image-to-3d/`,
+  };
+
+  const selectedKey = String(subModel || 'trellis2').toLowerCase().trim();
+  if (selectedKey === 'tripo-p2') {
+    payload.quad = true;
+  }
+
+  const primaryEndpoint = modelEndpointMap[selectedKey] || modelEndpointMap.trellis2;
+
+  // Ordered endpoints starting with user selected model, then budget fallbacks
+  const fallbackList = [
+    modelEndpointMap.trellis2,
+    modelEndpointMap['hunyuan-rapid'],
+    modelEndpointMap['hunyuan-pro'],
+    modelEndpointMap['tripo-p1'],
+    modelEndpointMap.hitem3d,
   ];
+  const endpoints = [primaryEndpoint, ...fallbackList.filter((e) => e !== primaryEndpoint)];
 
   let createRes;
   let usedEndpoint = endpoints[0];

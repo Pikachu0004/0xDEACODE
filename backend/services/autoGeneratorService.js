@@ -10,11 +10,11 @@ const { tryPrebuiltFallback } = require('../utils/prebuiltFallback');
  * Executes 3D model generation using either a specific engine
  * or the Auto-fallback strategy (tries WaveSpeed first if key configured, then free engines).
  */
-async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId, updateTask }) {
+async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId, updateTask, subModel }) {
   if (engine === 'threedai' || engine === '3daistudio') {
     try {
       if (imageInput) {
-        await runThreeDaiImageTo3D({ imageInput, taskId, updateTask });
+        await runThreeDaiImageTo3D({ imageInput, taskId, updateTask, subModel });
       } else {
         // If text query, try Pixora AI (Sketchfab library) or Trellis
         await runSketchfabGeneration({ prompt, taskId, updateTask });
@@ -110,7 +110,7 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
     try {
       console.log(`[Auto 3D] Attempting 3D AI Studio with configured API key...`);
       await updateTask({ progress: 10, status: 'RUNNING' });
-      await runThreeDaiImageTo3D({ imageInput, taskId, updateTask });
+      await runThreeDaiImageTo3D({ imageInput, taskId, updateTask, subModel });
       console.log(`[Auto 3D] 3D AI Studio succeeded for task ${taskId}!`);
       return;
     } catch (tdErr) {

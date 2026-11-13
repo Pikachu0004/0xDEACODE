@@ -48,8 +48,9 @@ function mapPolyToTarget(poly) {
 
 // POST /api/tripo/generate — Tripo / Hunyuan text-to-3d
 exports.generate3DModel = async (req, res) => {
-  const { prompt, target_polycount, poly_budget, engine: rawEngine } = req.body || {};
+  const { prompt, target_polycount, poly_budget, engine: rawEngine, sub_model, subModel: altSubModel, model } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
+  const subModel = sub_model || altSubModel || model || 'trellis2';
   const engine = ['pixora', 'sketchfab', 'threedai', '3daistudio', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'pixora';
@@ -75,6 +76,7 @@ exports.generate3DModel = async (req, res) => {
       dispatchGeneration({
         engine,
         prompt: task.prompt,
+        subModel,
         taskId,
         updateTask: async (fields) => {
           await Tripo3DTask.updateOne({ taskId }, { $set: fields });
@@ -201,8 +203,9 @@ exports.generate3DModel = async (req, res) => {
 
 // POST /api/tripo/generate-from-image — Tripo / Hunyuan image-to-3d
 exports.generateFromImage = async (req, res) => {
-  const { image_url, image_data_url, poly_budget, target_polycount, engine: rawEngine } = req.body || {};
+  const { image_url, image_data_url, poly_budget, target_polycount, engine: rawEngine, sub_model, subModel: altSubModel, model } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
+  const subModel = sub_model || altSubModel || model || 'trellis2';
   const engine = ['threedai', '3daistudio', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'auto';
@@ -219,7 +222,7 @@ exports.generateFromImage = async (req, res) => {
       const task = await Tripo3DTask.create({
         userId: req.user._id,
         taskId,
-        prompt: `Image-to-3D (${engine})`,
+        prompt: `Image-to-3D (${engine}${subModel ? ` · ${subModel}` : ''})`,
         tripoApiKind: 'image_to_model',
         status: 'QUEUED',
         engine,
@@ -229,6 +232,7 @@ exports.generateFromImage = async (req, res) => {
       dispatchGeneration({
         engine,
         imageInput,
+        subModel,
         taskId,
         updateTask: async (fields) => {
           await Tripo3DTask.updateOne({ taskId }, { $set: fields });

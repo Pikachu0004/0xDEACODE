@@ -6,7 +6,8 @@ export type { TripoTaskPayload };
 export async function createTripoTextTask(
   prompt: string,
   poly: 'low' | 'medium' | 'high',
-  engine: 'pixora' | 'threedai' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'pixora'
+  engine: 'pixora' | 'threedai' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'pixora',
+  subModel?: string
 ) {
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');
@@ -18,6 +19,7 @@ export async function createTripoTextTask(
       prompt: prompt.trim().slice(0, 600),
       poly_budget: poly,
       engine,
+      sub_model: subModel,
     }),
   });
 
@@ -27,7 +29,8 @@ export async function createTripoTextTask(
 export async function createTripoImageTask(
   imageDataUrl: string,
   poly: 'low' | 'medium' | 'high',
-  engine: 'pixora' | 'threedai' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'auto'
+  engine: 'pixora' | 'threedai' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'auto',
+  subModel?: string
 ) {
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');
@@ -39,6 +42,7 @@ export async function createTripoImageTask(
       image_data_url: imageDataUrl,
       poly_budget: poly,
       engine,
+      sub_model: subModel,
     }),
   });
 

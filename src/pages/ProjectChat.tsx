@@ -87,6 +87,73 @@ function startSpeechRecognition(
   rec.start();
 }
 
+export interface ThreeDaiModelOption {
+  id: string;
+  name: string;
+  credits: number;
+  creditBadge: string;
+  badgeColor: string;
+  speed: string;
+  desc: string;
+}
+
+export const THREEDAI_SUB_MODELS: ThreeDaiModelOption[] = [
+  {
+    id: 'trellis2',
+    name: 'TRELLIS.2 (Budget Pick)',
+    credits: 15,
+    creditBadge: '15 credits',
+    badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    speed: '4-8 min',
+    desc: 'Lowest price budget pick · Thin & open shapes with PBR',
+  },
+  {
+    id: 'hunyuan-rapid',
+    name: 'Tencent Hunyuan Rapid',
+    credits: 20,
+    creditBadge: '20 credits',
+    badgeColor: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+    speed: '2-4 min',
+    desc: 'Fast production geometry with optional PBR textures',
+  },
+  {
+    id: 'hunyuan-pro',
+    name: 'Tencent Hunyuan Pro',
+    credits: 40,
+    creditBadge: '40 credits',
+    badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    speed: '3-4 min',
+    desc: 'Sharpest edges, best for hard-surface shapes',
+  },
+  {
+    id: 'tripo-p1',
+    name: 'Tripo P1 Game Ready',
+    credits: 60,
+    creditBadge: '60 credits',
+    badgeColor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    speed: '60-90s',
+    desc: 'Ultra-fast game-ready topology',
+  },
+  {
+    id: 'tripo-p2',
+    name: 'Tripo P2 Game Ready',
+    credits: 70,
+    creditBadge: '70 credits',
+    badgeColor: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    speed: '1-3 min',
+    desc: 'Native quad mesh output for rigging & animation',
+  },
+  {
+    id: 'hitem3d',
+    name: 'Hitem3D 3.0',
+    credits: 125,
+    creditBadge: '125 credits',
+    badgeColor: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    speed: '5-15 min',
+    desc: 'Watertight ultra-high mesh up to 5M faces',
+  },
+];
+
 export default function ProjectChat() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -131,6 +198,11 @@ export default function ProjectChat() {
     modelUrls?: ChatMessage['modelUrls'];
   } | null>(null);
 
+  const [threeDaiSubModel, setThreeDaiSubModel] = useState<string>('trellis2');
+  const [isThreeDaiExpanded, setIsThreeDaiExpanded] = useState<boolean>(false);
+
+  const activeThreeDaiSub = THREEDAI_SUB_MODELS.find((m) => m.id === threeDaiSubModel) || THREEDAI_SUB_MODELS[0];
+
   const imageInputRef = useRef<HTMLInputElement>(null);
   const modelInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -138,7 +210,11 @@ export default function ProjectChat() {
 
   const providers = [
     { name: 'Pixora AI (Recommended)', icon: Sparkles, desc: 'Primary smart 3D engine with high-fidelity library' },
-    { name: '3D AI Studio (15 Credits)', icon: Sparkles, desc: 'Budget Image-to-3D via TRELLIS.2 (15 credits · 3daistudio.com)' },
+    {
+      name: '3D AI Studio',
+      icon: Sparkles,
+      desc: `Multi-Model API: ${activeThreeDaiSub.name} (${activeThreeDaiSub.creditBadge})`,
+    },
     { name: 'Auto (Best Free Engine)', icon: Cpu, desc: 'Tries Pixora AI / fast low-quota engines with auto-fallback' },
     { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
@@ -451,7 +527,7 @@ export default function ProjectChat() {
       engineKey === 'pixora' || engineKey === 'sketchfab'
         ? 'Pixora AI'
         : engineKey === 'threedai'
-          ? '3D AI Studio'
+          ? `3D AI Studio (${activeThreeDaiSub.name} · ${activeThreeDaiSub.creditBadge})`
           : engineKey === 'auto'
             ? 'Pixora Auto'
             : engineKey === 'wavespeed'
@@ -467,7 +543,12 @@ export default function ProjectChat() {
     setIsGenerating(true);
     setMeshyProgress(0);
     try {
-      const taskId = await createTripoImageTask(stagedImage, gen.poly, engineKey);
+      const taskId = await createTripoImageTask(
+        stagedImage,
+        gen.poly,
+        engineKey,
+        engineKey === 'threedai' ? threeDaiSubModel : undefined
+      );
       addChatMessage(id!, {
         id: Math.random().toString(36).substr(2, 9),
         role: 'user',
@@ -773,10 +854,19 @@ export default function ProjectChat() {
               <button
                 type="button"
                 onClick={() => setIsProviderOpen(!isProviderOpen)}
-                className="flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-primary/50 transition-all group"
+                className="flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-primary/50 transition-all group"
               >
                 <div className="w-2 h-2 rounded-full bg-brand-primary shadow-[0_0_10px_rgb(119_67_219_/_0.5)]" />
-                <span className="text-[10px] font-bold uppercase tracking-widest">{selectedProvider}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest truncate max-w-[140px] sm:max-w-none">
+                  {selectedProvider.includes('3D AI Studio')
+                    ? `3D AI Studio · ${activeThreeDaiSub.name}`
+                    : selectedProvider}
+                </span>
+                {selectedProvider.includes('3D AI Studio') && (
+                  <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${activeThreeDaiSub.badgeColor}`}>
+                    {activeThreeDaiSub.credits} cr
+                  </span>
+                )}
                 <ChevronRight className={`w-3 h-3 text-white/20 transition-transform ${isProviderOpen ? 'rotate-90' : ''}`} />
               </button>
               <AnimatePresence>
@@ -785,29 +875,124 @@ export default function ProjectChat() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute top-full left-0 mt-2 w-64 bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 overflow-hidden"
+                    className="absolute top-full right-0 mt-2 w-80 sm:w-96 max-h-[82vh] overflow-y-auto bg-[#0A0A0A]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2.5 z-50 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10"
                   >
-                    <div className="px-3 py-2 border-b border-white/5 mb-2">
+                    <div className="px-3 py-2 border-b border-white/5 mb-2 flex items-center justify-between">
                       <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Select AI Engine</p>
+                      {selectedProvider.includes('3D AI Studio') && (
+                        <span className="text-[9px] font-mono text-brand-primary">
+                          Model: {activeThreeDaiSub.name}
+                        </span>
+                      )}
                     </div>
-                    {providers.map((p) => (
-                      <button
-                        key={p.name}
-                        type="button"
-                        onClick={() => {
-                          setSelectedProvider(p.name);
-                          setIsProviderOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${selectedProvider === p.name ? 'bg-brand-primary/10 text-brand-primary' : 'hover:bg-white/5 text-white/60'}`}
-                      >
-                        <p.icon className="w-4 h-4" />
-                        <div className="text-left">
-                          <p className="text-[10px] font-bold uppercase tracking-widest">{p.name}</p>
-                          <p className="text-[9px] text-white/40">{p.desc}</p>
-                        </div>
-                        {selectedProvider === p.name && <Check className="w-3 h-3 ml-auto" />}
-                      </button>
-                    ))}
+                    {providers.map((p) => {
+                      const is3Dai = p.name === '3D AI Studio';
+                      const isSelected = selectedProvider.includes(p.name);
+
+                      if (is3Dai) {
+                        return (
+                          <div key={p.name} className="rounded-xl border border-white/10 bg-white/[0.02] p-1.5 space-y-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProvider(p.name);
+                                setIsThreeDaiExpanded(!isThreeDaiExpanded);
+                              }}
+                              className={`w-full flex items-center gap-2.5 p-2.5 rounded-lg transition-all ${
+                                isSelected
+                                  ? 'bg-brand-primary/15 text-white border border-brand-primary/30'
+                                  : 'hover:bg-white/5 text-white/70'
+                              }`}
+                            >
+                              <p.icon className="w-4 h-4 text-brand-primary shrink-0" />
+                              <div className="text-left flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-[10px] font-bold uppercase tracking-widest text-white">3D AI Studio</p>
+                                  <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.2 rounded border ${activeThreeDaiSub.badgeColor}`}>
+                                    {activeThreeDaiSub.creditBadge}
+                                  </span>
+                                </div>
+                                <p className="text-[9px] text-white/40 truncate">
+                                  Active: {activeThreeDaiSub.name} ({activeThreeDaiSub.speed})
+                                </p>
+                              </div>
+                              <ChevronRight
+                                className={`w-3.5 h-3.5 text-white/40 transition-transform ${
+                                  isThreeDaiExpanded || isSelected ? 'rotate-90' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {/* Sub-options for 3D AI Studio models */}
+                            <div className="pt-1 pb-0.5 space-y-1 border-t border-white/5">
+                              <p className="text-[8.5px] font-bold uppercase tracking-widest text-white/35 px-1">
+                                Choose Model &amp; Credit Cost:
+                              </p>
+                              <div className="space-y-1">
+                                {THREEDAI_SUB_MODELS.map((sub) => {
+                                  const isSubSelected = isSelected && threeDaiSubModel === sub.id;
+                                  return (
+                                    <button
+                                      key={sub.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setThreeDaiSubModel(sub.id);
+                                        setSelectedProvider('3D AI Studio');
+                                        setIsProviderOpen(false);
+                                      }}
+                                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left transition-all ${
+                                        isSubSelected
+                                          ? 'bg-brand-primary/25 text-white border border-brand-primary/50 shadow-[0_0_10px_rgba(119,67,219,0.25)]'
+                                          : 'hover:bg-white/5 text-white/70 border border-transparent'
+                                      }`}
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-bold text-white/90 truncate">{sub.name}</span>
+                                          <span className="text-[8px] text-white/30 font-mono">({sub.speed})</span>
+                                        </div>
+                                        <p className="text-[8.5px] text-white/40 line-clamp-1">{sub.desc}</p>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded border ${sub.badgeColor}`}>
+                                          {sub.creditBadge}
+                                        </span>
+                                        {isSubSelected ? (
+                                          <Check className="w-3.5 h-3.5 text-brand-primary" />
+                                        ) : (
+                                          <div className="w-3.5 h-3.5" />
+                                        )}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={p.name}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProvider(p.name);
+                            setIsProviderOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all ${
+                            isSelected ? 'bg-brand-primary/10 text-brand-primary border border-brand-primary/20' : 'hover:bg-white/5 text-white/60'
+                          }`}
+                        >
+                          <p.icon className="w-4 h-4 shrink-0" />
+                          <div className="text-left flex-1 min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-widest">{p.name}</p>
+                            <p className="text-[9px] text-white/40 truncate">{p.desc}</p>
+                          </div>
+                          {isSelected && <Check className="w-3.5 h-3.5 ml-auto text-brand-primary shrink-0" />}
+                        </button>
+                      );
+                    })}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -1022,13 +1207,49 @@ export default function ProjectChat() {
                         Image-to-3D Model Generator
                       </h4>
                       <p className="text-xs text-white/50 mt-0.5">
-                        Ready to convert into textured GLB using <span className="text-brand-primary font-medium">{selectedProvider}</span>
+                        Ready to convert into textured GLB using <span className="text-brand-primary font-medium">{selectedProvider.includes('3D AI Studio') ? `3D AI Studio (${activeThreeDaiSub.name})` : selectedProvider}</span>
                       </p>
                     </div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-primary/20 text-brand-primary border border-brand-primary/30 uppercase tracking-wider shrink-0">
                       {gen.poly} poly
                     </span>
                   </div>
+
+                  {selectedProvider.includes('3D AI Studio') && (
+                    <div className="space-y-1.5 pt-2 border-t border-white/10">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-white/40 uppercase tracking-widest font-bold">Select 3D AI Studio Model:</span>
+                        <span className={`font-mono font-bold text-[9px] px-2 py-0.5 rounded border ${activeThreeDaiSub.badgeColor}`}>
+                          Cost: {activeThreeDaiSub.creditBadge}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {THREEDAI_SUB_MODELS.map((sub) => {
+                          const isSelected = threeDaiSubModel === sub.id;
+                          return (
+                            <button
+                              key={sub.id}
+                              type="button"
+                              onClick={() => setThreeDaiSubModel(sub.id)}
+                              className={`p-2 rounded-xl text-left border transition-all flex flex-col justify-between ${
+                                isSelected
+                                  ? 'bg-brand-primary/25 border-brand-primary text-white shadow-[0_0_12px_rgba(119,67,219,0.3)]'
+                                  : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 w-full">
+                                <span className="text-[10px] font-bold text-white/90 truncate">{sub.name}</span>
+                                <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${sub.badgeColor}`}>
+                                  {sub.credits} cr
+                                </span>
+                              </div>
+                              <span className="text-[8px] text-white/40 mt-1 line-clamp-1">{sub.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button
