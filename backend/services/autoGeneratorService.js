@@ -1,5 +1,6 @@
 const { runWaveSpeedGeneration, getWaveSpeedKey } = require('./wavespeedService');
 const { runSketchfabGeneration, getSketchfabToken } = require('./sketchfabService');
+const { runMeshyGeneration, getMeshyApiKey } = require('./meshyService');
 const { runTrellisGeneration } = require('./trellisService');
 const { runHunyuanGeneration } = require('./hunyuanService');
 const { runShapeGeneration } = require('./shapeService');
@@ -10,6 +11,18 @@ const { tryPrebuiltFallback } = require('../utils/prebuiltFallback');
  * or the Auto-fallback strategy (tries WaveSpeed first if key configured, then free engines).
  */
 async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId, updateTask }) {
+  if (engine === 'meshy') {
+    try {
+      await runMeshyGeneration({ prompt, imageInput, taskId, updateTask });
+    } catch (err) {
+      await updateTask({
+        status: 'FAILED',
+        errorMessage: err.message || 'Meshy 3D generation failed',
+      });
+    }
+    return;
+  }
+
   if (engine === 'wavespeed') {
     try {
       await runWaveSpeedGeneration({ prompt, imageInput, taskId, updateTask });
@@ -83,6 +96,20 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
       return;
     } catch (pxErr) {
       console.warn(`[Auto 3D] Pixora AI library attempt failed (${pxErr.message}). Falling back to WaveSpeed / neural diffusion...`);
+      await updateTask({ progress: 20, status: 'RUNNING' });
+    }
+  }
+
+  // If user configured MESHY_API_KEY in Render, prioritize Meshy AI
+  if (getMeshyApiKey()) {
+    try {
+      console.log(`[Auto 3D] Attempting Meshy 3D with configured API key...`);
+      await updateTask({ progress: 10, status: 'RUNNING' });
+      await runMeshyGeneration({ prompt, imageInput, taskId, updateTask });
+      console.log(`[Auto 3D] Meshy 3D succeeded for task ${taskId}!`);
+      return;
+    } catch (meshyErr) {
+      console.warn(`[Auto 3D] Meshy attempt failed (${meshyErr.message}). Falling back to WaveSpeed...`);
       await updateTask({ progress: 20, status: 'RUNNING' });
     }
   }

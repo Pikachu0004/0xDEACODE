@@ -138,18 +138,20 @@ export default function ProjectChat() {
 
   const providers = [
     { name: 'Pixora AI (Recommended)', icon: Sparkles, desc: 'Primary smart 3D engine with high-fidelity library' },
+    { name: 'Meshy 3D (Free Credits)', icon: Sparkles, desc: 'High-quality PBR Image-to-3D using free Meshy credits' },
     { name: 'Auto (Best Free Engine)', icon: Cpu, desc: 'Tries Pixora AI / fast low-quota engines with auto-fallback' },
     { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
-    { name: 'OpenAI Shap-E (Free · Fast)', icon: Cpu, desc: 'Lightweight free Text-to-3D by OpenAI (MIT License)' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
     { name: 'Hunyuan3D (Free · Detail)', icon: Box, desc: 'Tencent High-Detail 3D Engine' },
     { name: 'Tripo AI', icon: Sparkles, desc: 'Commercial 3D engine (Requires Tripo Credits)' },
+    { name: 'OpenAI Shap-E (Free · Fast)', icon: Cpu, desc: 'Lightweight free Text-to-3D by OpenAI (MIT License)' },
     { name: 'Hyper3D', icon: Box, desc: 'Fastest text-to-3D generation' },
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
   ];
 
-  const getEngineKey = (provider: string): 'pixora' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
+  const getEngineKey = (provider: string): 'pixora' | 'meshy' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
     if (provider.startsWith('Pixora')) return 'pixora';
+    if (provider.startsWith('Meshy')) return 'meshy';
     if (provider.startsWith('Auto')) return 'auto';
     if (provider.toLowerCase().includes('sketchfab')) return 'pixora';
     if (provider.startsWith('WaveSpeed')) return 'wavespeed';
@@ -320,17 +322,19 @@ export default function ProjectChat() {
     const engineLabel =
       engineKey === 'pixora' || engineKey === 'sketchfab'
         ? 'Pixora AI'
-        : engineKey === 'auto'
-          ? 'Pixora Auto'
-          : engineKey === 'wavespeed'
-            ? 'WaveSpeed AI'
-            : engineKey === 'shape'
-              ? 'OpenAI Shap-E'
-              : engineKey === 'trellis'
-                ? 'TRELLIS'
-                : engineKey === 'hunyuan'
-                  ? 'Hunyuan3D'
-                  : 'Tripo';
+        : engineKey === 'meshy'
+          ? 'Meshy 3D'
+          : engineKey === 'auto'
+            ? 'Pixora Auto'
+            : engineKey === 'wavespeed'
+              ? 'WaveSpeed AI'
+              : engineKey === 'shape'
+                ? 'OpenAI Shap-E'
+                : engineKey === 'trellis'
+                  ? 'TRELLIS'
+                  : engineKey === 'hunyuan'
+                    ? 'Hunyuan3D'
+                    : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -446,17 +450,19 @@ export default function ProjectChat() {
     const engineLabel =
       engineKey === 'pixora' || engineKey === 'sketchfab'
         ? 'Pixora AI'
-        : engineKey === 'auto'
-          ? 'Pixora Auto'
-          : engineKey === 'wavespeed'
-            ? 'WaveSpeed AI'
-            : engineKey === 'shape'
-              ? 'OpenAI Shap-E'
-              : engineKey === 'trellis'
-                ? 'TRELLIS'
-                : engineKey === 'hunyuan'
-                  ? 'Hunyuan3D'
-                  : 'Tripo';
+        : engineKey === 'meshy'
+          ? 'Meshy 3D'
+          : engineKey === 'auto'
+            ? 'Pixora Auto'
+            : engineKey === 'wavespeed'
+              ? 'WaveSpeed AI'
+              : engineKey === 'shape'
+                ? 'OpenAI Shap-E'
+                : engineKey === 'trellis'
+                  ? 'TRELLIS'
+                  : engineKey === 'hunyuan'
+                    ? 'Hunyuan3D'
+                    : 'Tripo';
 
     setIsGenerating(true);
     setMeshyProgress(0);
@@ -991,32 +997,55 @@ export default function ProjectChat() {
         <div className="p-6 md:p-8 border-t border-white/5 bg-black/40 backdrop-blur-xl">
           <div className="max-w-3xl mx-auto">
             {getEngineKey(selectedProvider) !== null && stagedImage ? (
-              <div className="mb-4 flex flex-col sm:flex-row gap-4 items-start rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <img
-                  src={stagedImage}
-                  alt="Staged for 3D"
-                  className="w-full sm:w-40 h-40 object-cover rounded-xl border border-white/10 shrink-0"
-                />
-                <div className="flex-1 space-y-3 min-w-0">
-                  <p className="text-xs text-white/50">
-                    Image ready. Choose <span className="text-white/80">Model</span> (mesh) or{' '}
-                    <span className="text-white/80">Textured</span> in the header, then generate.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
+              <div className="mb-4 flex flex-col sm:flex-row gap-4 items-center sm:items-start rounded-2xl border border-brand-primary/30 bg-gradient-to-r from-brand-primary/10 via-white/[0.03] to-transparent p-5 shadow-xl shadow-brand-primary/5">
+                <div className="relative group shrink-0">
+                  <img
+                    src={stagedImage}
+                    alt="Staged for 3D"
+                    className="w-32 h-32 sm:w-36 sm:h-36 object-cover rounded-xl border border-white/20 shadow-md"
+                  />
+                  <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="text-[10px] uppercase font-bold text-white bg-black/60 px-2.5 py-1 rounded-md"
+                    >
+                      Change
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-3 min-w-0 w-full">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-brand-primary" />
+                        Image-to-3D Model Generator
+                      </h4>
+                      <p className="text-xs text-white/50 mt-0.5">
+                        Ready to convert into textured GLB using <span className="text-brand-primary font-medium">{selectedProvider}</span>
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-primary/20 text-brand-primary border border-brand-primary/30 uppercase tracking-wider shrink-0">
+                      {gen.poly} poly
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button
                       type="button"
                       disabled={isGenerating}
                       onClick={handleGenerateFromImage}
-                      className="px-5 py-2.5 rounded-xl bg-brand-primary text-black text-[10px] font-bold uppercase tracking-widest hover:bg-brand-primary/90 disabled:opacity-50"
+                      className="px-6 py-2.5 rounded-xl bg-brand-primary text-black text-xs font-bold uppercase tracking-wider hover:bg-brand-primary/90 disabled:opacity-50 transition-all flex items-center gap-2 shadow-lg shadow-brand-primary/20"
                     >
-                      Generate 3D from image
+                      <Sparkles className="w-4 h-4" />
+                      Convert Image to 3D
                     </button>
                     <button
                       type="button"
                       onClick={() => setStagedImage(null)}
-                      className="px-5 py-2.5 rounded-xl border border-white/15 text-[10px] font-bold uppercase tracking-widest text-white/60 hover:bg-white/5"
+                      className="px-4 py-2.5 rounded-xl border border-white/15 text-xs font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all"
                     >
-                      Remove
+                      Cancel
                     </button>
                   </div>
                 </div>

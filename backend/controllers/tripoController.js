@@ -50,7 +50,7 @@ function mapPolyToTarget(poly) {
 exports.generate3DModel = async (req, res) => {
   const { prompt, target_polycount, poly_budget, engine: rawEngine } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
-  const engine = ['pixora', 'sketchfab', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
+  const engine = ['pixora', 'sketchfab', 'meshy', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'pixora';
 
@@ -59,8 +59,8 @@ exports.generate3DModel = async (req, res) => {
       return res.status(400).json({ message: 'Prompt is required' });
     }
 
-    if (['pixora', 'sketchfab', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape'].includes(engine)) {
-      const prefix = (engine === 'pixora' || engine === 'sketchfab') ? 'px_' : engine === 'wavespeed' ? 'ws_' : engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : engine === 'shape' ? 'se_' : 'auto_';
+    if (['pixora', 'sketchfab', 'meshy', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape'].includes(engine)) {
+      const prefix = (engine === 'pixora' || engine === 'sketchfab') ? 'px_' : engine === 'meshy' ? 'me_' : engine === 'wavespeed' ? 'ws_' : engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : engine === 'shape' ? 'se_' : 'auto_';
       const taskId = `${prefix}${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const task = await Tripo3DTask.create({
         userId: req.user._id,
@@ -203,7 +203,7 @@ exports.generate3DModel = async (req, res) => {
 exports.generateFromImage = async (req, res) => {
   const { image_url, image_data_url, poly_budget, target_polycount, engine: rawEngine } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
-  const engine = ['auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
+  const engine = ['auto', 'meshy', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'auto';
   const imageInput = String(image_data_url || image_url || '').trim();
@@ -213,8 +213,8 @@ exports.generateFromImage = async (req, res) => {
       return res.status(400).json({ message: 'image_data_url or image_url is required' });
     }
 
-    if (['auto', 'wavespeed', 'trellis', 'hunyuan', 'shape'].includes(engine)) {
-      const prefix = engine === 'wavespeed' ? 'ws_' : engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : engine === 'shape' ? 'se_' : 'auto_';
+    if (['auto', 'meshy', 'wavespeed', 'trellis', 'hunyuan', 'shape'].includes(engine)) {
+      const prefix = engine === 'meshy' ? 'me_' : engine === 'wavespeed' ? 'ws_' : engine === 'trellis' ? 'tr_' : engine === 'hunyuan' ? 'hy_' : engine === 'shape' ? 'se_' : 'auto_';
       const taskId = `${prefix}${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const task = await Tripo3DTask.create({
         userId: req.user._id,
@@ -412,10 +412,11 @@ exports.getTaskStatus = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Internal tasks (Pixora, Sketchfab, WaveSpeed, TRELLIS, Hunyuan3D, OpenAI Shap-E, Auto) are managed internally in DB
+    // Internal tasks (Pixora, Meshy, Sketchfab, WaveSpeed, TRELLIS, Hunyuan3D, OpenAI Shap-E, Auto) are managed internally in DB
     if (
-      ['pixora', 'auto', 'sketchfab', 'wavespeed', 'hunyuan', 'trellis', 'shape'].includes(task.engine) ||
+      ['pixora', 'meshy', 'auto', 'sketchfab', 'wavespeed', 'hunyuan', 'trellis', 'shape'].includes(task.engine) ||
       task.taskId.startsWith('px_') ||
+      task.taskId.startsWith('me_') ||
       task.taskId.startsWith('sf_') ||
       task.taskId.startsWith('ws_') ||
       task.taskId.startsWith('hy_') ||
