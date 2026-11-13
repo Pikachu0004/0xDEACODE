@@ -41,6 +41,7 @@ import { createTripoImageTask, createTripoTextTask, pollTripoTask, type TripoTas
 import { fetchGlbArrayBufferForPublish, glbArrayBufferToDataUrl } from '../lib/fetchGlbForPublish';
 import { submitWebArPublish } from '../lib/submitWebArPublish';
 import { StudioPublishDialog, type StudioPublishOptions } from '../components/studio/StudioPublishDialog';
+import { matchPrebuiltModel, PREBUILT_MODELS } from '../data/prebuiltModels';
 
 const CONCEPT_IMAGES = [
   '/Human_Avatar_Kishan_Nishad_img.png',
@@ -53,10 +54,12 @@ const MODEL_FOR_IMAGE: Record<string, string> = {
 };
 
 const SUGGESTED_PROMPTS = [
+  'DTU Gate — Delhi Technological University (DCE) campus entrance arch',
+  'Red Fort — Historic Lal Qila monumental sandstone citadel',
+  'Yellow Duck — Classic rubber duck for tabletop AR testing',
+  'Speed Boat — Streamlined hydrofoil motorboat racer',
+  'Sports Car — Showroom Huracán-class supercar with motion drive',
   'Product hero: white sneakers on neutral studio — AR try-on for ecommerce',
-  'Showroom car config: lime sports car — place in driveway via WebAR',
-  'Corporate avatar: professional bust for virtual meetings & AR name card',
-  'Retail display: compact robot mascot — sustainability, no physical sample run',
 ];
 
 function startSpeechRecognition(
@@ -265,6 +268,50 @@ export default function ProjectChat() {
     if (!input.trim() || isGenerating) return;
 
     const currentInput = input.trim();
+
+    // Check if the input matches an iconic prebuilt 3D model (e.g. DTU Gate, Red Fort, Duck, Boat, Car)
+    const matchedPrebuilt = matchPrebuiltModel(currentInput);
+    if (matchedPrebuilt) {
+      const userMessage: ChatMessage = {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'user',
+        content: `[Instant 3D Catalog] ${currentInput}`,
+      };
+      addChatMessage(id!, userMessage);
+      setInput('');
+      setIsGenerating(true);
+
+      const finalGlb = matchedPrebuilt.modelUrl;
+      const urls = compactModelUrls({
+        glb: finalGlb,
+        source: finalGlb,
+        originalUrl: finalGlb,
+      });
+
+      setTimeout(() => {
+        const aiMessage: ChatMessage = {
+          id: Math.random().toString(36).substr(2, 9),
+          role: 'assistant',
+          content: `Pixora 3D Catalog: Instant model ready for “${matchedPrebuilt.name}”. Open in AR Studio or publish to WebAR!`,
+          modelUrl: finalGlb,
+          modelUrls: urls,
+        };
+        addChatMessage(id!, aiMessage);
+
+        updateProject(id!, {
+          modelUrl: finalGlb,
+          modelDataUrl: undefined,
+          thumbnailUrl: matchedPrebuilt.thumbnailUrl,
+          modelUrls: urls,
+          status: 'draft',
+        });
+        openPostModelFlow(finalGlb);
+        setIsGenerating(false);
+      }, 350);
+
+      return;
+    }
+
     const engineKey = getEngineKey(selectedProvider);
     const isAiEngine = engineKey !== null;
     const engineLabel = engineKey === 'auto'
@@ -983,6 +1030,30 @@ export default function ProjectChat() {
                 reader.readAsDataURL(f);
               }}
             />
+            <div className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/30 shrink-0 mr-1 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-brand-primary" />
+                Instant 3D:
+              </span>
+              {[
+                { label: '🏛️ DTU Gate', prompt: 'DTU Gate' },
+                { label: '🚩 Red Fort', prompt: 'Red Fort' },
+                { label: '🦆 Duck', prompt: 'Duck' },
+                { label: '🚤 Speed Boat', prompt: 'Speed Boat' },
+                { label: '🏎️ Sports Car', prompt: 'Sports Car' },
+              ].map((badge) => (
+                <button
+                  key={badge.label}
+                  type="button"
+                  onClick={() => {
+                    setInput(badge.prompt);
+                  }}
+                  className="px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:border-brand-primary/50 hover:bg-brand-primary/10 text-white/70 hover:text-white transition-all text-[11px] font-medium shrink-0"
+                >
+                  {badge.label}
+                </button>
+              ))}
+            </div>
             <form onSubmit={handleSend} className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-brand-primary/20 to-brand-secondary/20 blur-2xl rounded-[3rem] opacity-0 group-focus-within:opacity-100 transition-all duration-500" />
               <div className="relative flex items-center gap-2 bg-white/5 border border-white/10 rounded-[2.5rem] p-2 md:p-3 focus-within:border-brand-primary/50 transition-all backdrop-blur-md flex-wrap">

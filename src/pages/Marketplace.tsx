@@ -109,8 +109,14 @@ export default function Marketplace() {
   };
 
   const filteredItems = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return marketplaceItems.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch =
+        !q ||
+        item.name.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.creator.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q);
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });

@@ -150,3 +150,4 @@ async function runShapeGeneration({ prompt, imageInput, taskId, updateTask }) {
 module.exports = {
   runShapeGeneration,
 };
+

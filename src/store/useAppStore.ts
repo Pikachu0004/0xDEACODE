@@ -11,6 +11,7 @@ import {
 } from '../lib/api';
 import { isMongoObjectId } from '../lib/mongoId';
 import type { InteractivePart, ModelCapabilities } from '../types/interactions';
+import { PREBUILT_MODELS } from '../data/prebuiltModels';
 
 export interface User {
   id: string;
@@ -295,71 +296,19 @@ export interface Freelancer {
   avatar: string;
 }
 
-/** Single source of truth — also used when migrating old persisted catalogs */
-export const DEFAULT_MARKETPLACE_ITEMS: MarketplaceItem[] = [
-  {
-    id: 'm-avatar',
-    name: 'Human Avatar — Studio PBR',
-    price: 89,
-    creator: 'VisiARise Labs',
-    thumbnailUrl: '/Human_Avatar_Kishan_Nishad_img.png',
-    modelUrl: '/Human_Avatar_Kishan_Nishad_model.glb',
-    category: 'models',
-    rating: 4.9,
-    sales: 42,
-    description:
-      'Photorealistic human avatar: clean topology, PBR materials, ready for WebAR.',
-  },
-  {
-    id: 'm-shoes',
-    name: 'Designer Sneakers',
-    price: 34,
-    creator: 'VisiARise Labs',
-    thumbnailUrl: '/Shoes.png',
-    modelUrl: '/models/shoes_basic_pbr.glb',
-    category: 'models',
-    rating: 4.7,
-    sales: 118,
-    description: 'High-detail footwear model with baked PBR — ideal for product AR.',
-  },
-  {
-    id: 'm-lambo',
-    name: 'Sports Car — Huracán-class',
-    price: 129,
-    creator: 'VisiARise Labs',
-    thumbnailUrl: '/Lamborgini_image.png',
-    modelUrl: '/models/lamborghini_basic_pbr.glb',
-    category: 'models',
-    rating: 4.8,
-    sales: 67,
-    description: 'Showroom-grade vehicle mesh with realistic materials for AR placement.',
-  },
-  {
-    id: 'm-iron',
-    name: 'Armored Hero Suit',
-    price: 79,
-    creator: 'VisiARise Labs',
-    thumbnailUrl: '/ironMan .png',
-    modelUrl: '/models/ironman_basic_pbr.glb',
-    category: 'models',
-    rating: 4.85,
-    sales: 91,
-    description: 'Full hero suit with metallic PBR — great for character-scale AR.',
-  },
-  {
-    id: 'm-drone',
-    name: 'Sci‑Fi Drone',
-    price: 45,
-    creator: 'VisiARise Labs',
-    thumbnailUrl: '/drone-generated.png',
-    modelUrl: '/scifi_drone.glb',
-    category: 'models',
-    rating: 4.75,
-    sales: 156,
-    description:
-      'Stylized sci‑fi drone from the public library — same GLB used in hero demos.',
-  },
-];
+/** Single source of truth — backed by prebuilt models catalog with DTU Gate, Red Fort, Duck, Boat, etc. */
+export const DEFAULT_MARKETPLACE_ITEMS: MarketplaceItem[] = PREBUILT_MODELS.map((item) => ({
+  id: item.id,
+  name: item.name,
+  price: item.price,
+  creator: item.creator,
+  thumbnailUrl: item.thumbnailUrl,
+  modelUrl: item.modelUrl,
+  category: item.category,
+  rating: item.rating,
+  sales: item.sales,
+  description: item.description,
+}));
 
 interface AppState {
   user: User | null;
@@ -599,6 +548,12 @@ export const useAppStore = create<AppState>()(
         if (Array.isArray(merged.projects)) {
           merged.projects = merged.projects.map(sanitizeProjectBlobUrls);
         }
+        // Ensure default marketplace catalog items (DTU Gate, Red Fort, Duck, Boat, etc.) are always present
+        const persistedItems = Array.isArray(merged.marketplaceItems) ? merged.marketplaceItems : [];
+        merged.marketplaceItems = [
+          ...DEFAULT_MARKETPLACE_ITEMS,
+          ...persistedItems.filter((i) => !DEFAULT_MARKETPLACE_ITEMS.some((d) => d.id === i.id)),
+        ];
         return merged as AppState;
       },
       onRehydrateStorage: () => (_state, error) => {
