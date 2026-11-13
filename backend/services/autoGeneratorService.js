@@ -1,5 +1,6 @@
 const { runWaveSpeedGeneration, getWaveSpeedKey } = require('./wavespeedService');
 const { runSketchfabGeneration, getSketchfabToken } = require('./sketchfabService');
+const { runThreeDaiImageTo3D, getThreeDaiKey } = require('./threeDaiStudioService');
 const { runTrellisGeneration } = require('./trellisService');
 const { runHunyuanGeneration } = require('./hunyuanService');
 const { runShapeGeneration } = require('./shapeService');
@@ -10,6 +11,23 @@ const { tryPrebuiltFallback } = require('../utils/prebuiltFallback');
  * or the Auto-fallback strategy (tries WaveSpeed first if key configured, then free engines).
  */
 async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId, updateTask }) {
+  if (engine === 'threedai' || engine === '3daistudio') {
+    try {
+      if (imageInput) {
+        await runThreeDaiImageTo3D({ imageInput, taskId, updateTask });
+      } else {
+        // If text query, try Pixora AI (Sketchfab library) or Trellis
+        await runSketchfabGeneration({ prompt, taskId, updateTask });
+      }
+    } catch (err) {
+      await updateTask({
+        status: 'FAILED',
+        errorMessage: err.message || '3D AI Studio generation failed',
+      });
+    }
+    return;
+  }
+
   if (engine === 'wavespeed') {
     try {
       await runWaveSpeedGeneration({ prompt, imageInput, taskId, updateTask });
@@ -83,6 +101,20 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
       return;
     } catch (pxErr) {
       console.warn(`[Auto 3D] Pixora AI library attempt failed (${pxErr.message}). Falling back to WaveSpeed / neural diffusion...`);
+      await updateTask({ progress: 20, status: 'RUNNING' });
+    }
+  }
+
+  // For image-to-3D, if user configured THREEDAI_API_KEY, prioritize 3D AI Studio (200 credits)!
+  if (imageInput && getThreeDaiKey()) {
+    try {
+      console.log(`[Auto 3D] Attempting 3D AI Studio with configured API key...`);
+      await updateTask({ progress: 10, status: 'RUNNING' });
+      await runThreeDaiImageTo3D({ imageInput, taskId, updateTask });
+      console.log(`[Auto 3D] 3D AI Studio succeeded for task ${taskId}!`);
+      return;
+    } catch (tdErr) {
+      console.warn(`[Auto 3D] 3D AI Studio attempt failed (${tdErr.message}). Falling back to WaveSpeed...`);
       await updateTask({ progress: 20, status: 'RUNNING' });
     }
   }

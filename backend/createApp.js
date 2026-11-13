@@ -55,8 +55,8 @@ function createApp() {
     res.json({
       status: 'OK',
       message: 'Pixora 3D Backend is running',
-      version: '1.8.0-pixora-clean',
-      supportedEngines: ['pixora', 'auto', 'sketchfab', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'],
+      version: '1.9.0-3daistudio',
+      supportedEngines: ['pixora', 'threedai', 'auto', 'sketchfab', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'],
       timestamp: new Date().toISOString(),
     });
   });
