@@ -1,4 +1,5 @@
 const { runWaveSpeedGeneration, getWaveSpeedKey } = require('./wavespeedService');
+const { runSketchfabGeneration, getSketchfabToken } = require('./sketchfabService');
 const { runTrellisGeneration } = require('./trellisService');
 const { runHunyuanGeneration } = require('./hunyuanService');
 const { runShapeGeneration } = require('./shapeService');
@@ -16,6 +17,18 @@ async function dispatchGeneration({ engine = 'auto', prompt, imageInput, taskId,
       await updateTask({
         status: 'FAILED',
         errorMessage: err.message || 'WaveSpeed 3D generation failed',
+      });
+    }
+    return;
+  }
+
+  if (engine === 'sketchfab') {
+    try {
+      await runSketchfabGeneration({ prompt, taskId, updateTask });
+    } catch (err) {
+      await updateTask({
+        status: 'FAILED',
+        errorMessage: err.message || 'Sketchfab 3D import failed',
       });
     }
     return;

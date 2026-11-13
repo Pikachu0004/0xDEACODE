@@ -23,6 +23,7 @@ import {
   X,
   Zap,
   Cpu,
+  Globe,
 } from 'lucide-react';
 import { ArdyaWordmark } from '../components/ArdyaWordmark';
 import { MeshyFormatDownloadLinks } from '../components/MeshyFormatDownloadLinks';
@@ -138,6 +139,7 @@ export default function ProjectChat() {
 
   const providers = [
     { name: 'Auto (Best Free Engine)', icon: Sparkles, desc: 'Tries WaveSpeed / fast low-quota engine first with auto-fallback' },
+    { name: 'Sketchfab 3D (Free Library)', icon: Globe, desc: 'Search & import free community 3D models from Sketchfab' },
     { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
     { name: 'OpenAI Shap-E (Free · Fast)', icon: Cpu, desc: 'Lightweight free Text-to-3D by OpenAI (MIT License)' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
@@ -147,8 +149,9 @@ export default function ProjectChat() {
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
   ];
 
-  const getEngineKey = (provider: string): 'auto' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
+  const getEngineKey = (provider: string): 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
     if (provider.startsWith('Auto')) return 'auto';
+    if (provider.toLowerCase().includes('sketchfab')) return 'sketchfab';
     if (provider.startsWith('WaveSpeed')) return 'wavespeed';
     if (provider.toLowerCase().includes('shap-e') || provider.toLowerCase().includes('shape') || provider.startsWith('OpenAI')) return 'shape';
     if (provider.startsWith('TRELLIS')) return 'trellis';
@@ -316,15 +319,17 @@ export default function ProjectChat() {
     const isAiEngine = engineKey !== null;
     const engineLabel = engineKey === 'auto'
       ? 'Auto 3D'
-      : engineKey === 'wavespeed'
-        ? 'WaveSpeed AI'
-        : engineKey === 'shape'
-          ? 'OpenAI Shap-E'
-          : engineKey === 'trellis'
-            ? 'TRELLIS'
-            : engineKey === 'hunyuan'
-              ? 'Hunyuan3D'
-              : 'Tripo';
+      : engineKey === 'sketchfab'
+        ? 'Sketchfab 3D'
+        : engineKey === 'wavespeed'
+          ? 'WaveSpeed AI'
+          : engineKey === 'shape'
+            ? 'OpenAI Shap-E'
+            : engineKey === 'trellis'
+              ? 'TRELLIS'
+              : engineKey === 'hunyuan'
+                ? 'Hunyuan3D'
+                : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -440,15 +445,17 @@ export default function ProjectChat() {
     const engineLabel =
       engineKey === 'auto'
         ? 'Auto 3D'
-        : engineKey === 'wavespeed'
-          ? 'WaveSpeed AI'
-          : engineKey === 'shape'
-            ? 'OpenAI Shap-E'
-            : engineKey === 'trellis'
-              ? 'TRELLIS'
-              : engineKey === 'hunyuan'
-                ? 'Hunyuan3D'
-                : 'Tripo';
+        : engineKey === 'sketchfab'
+          ? 'Sketchfab 3D'
+          : engineKey === 'wavespeed'
+            ? 'WaveSpeed AI'
+            : engineKey === 'shape'
+              ? 'OpenAI Shap-E'
+              : engineKey === 'trellis'
+                ? 'TRELLIS'
+                : engineKey === 'hunyuan'
+                  ? 'Hunyuan3D'
+                  : 'Tripo';
 
     setIsGenerating(true);
     setMeshyProgress(0);
