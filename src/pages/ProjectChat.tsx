@@ -138,7 +138,7 @@ export default function ProjectChat() {
 
   const providers = [
     { name: 'Pixora AI (Recommended)', icon: Sparkles, desc: 'Primary smart 3D engine with high-fidelity library' },
-    { name: '3D AI Studio', icon: Sparkles, desc: 'High-quality Image-to-3D generation (3daistudio.com)' },
+    { name: '3D AI Studio (15 Credits)', icon: Sparkles, desc: 'Budget Image-to-3D via TRELLIS.2 (15 credits · 3daistudio.com)' },
     { name: 'Auto (Best Free Engine)', icon: Cpu, desc: 'Tries Pixora AI / fast low-quota engines with auto-fallback' },
     { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },

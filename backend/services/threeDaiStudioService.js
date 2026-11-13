@@ -104,6 +104,7 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     texture: true,
     textures: true,
     pbr: true,
+    enable_pbr: true,
     resolution: '1024',
     texture_size: 2048,
   };
@@ -114,12 +115,16 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     payload.image_url = imageInput;
   }
 
-  // Model endpoints: try Tripo image-to-3d or Trellis2 or Tencent Rapid / Pro
+  // Model endpoints prioritized by lowest credit cost on 3D AI Studio:
+  // 1. Trellis 2 (15 credits - lowest price, sharp geometry & PBR)
+  // 2. Tencent Rapid (20 credits - fast low-cost fallback)
+  // 3. Tencent Pro (40 credits)
+  // 4. Tripo (70 credits - high cost fallback)
   const endpoints = [
-    `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
     `${THREEDAI_API_BASE}/v1/3d-models/trellis2/generate/`,
     `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/rapid/`,
     `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/pro/`,
+    `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
   ];
 
   let createRes;
