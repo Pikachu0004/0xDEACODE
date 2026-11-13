@@ -6,7 +6,7 @@ export type { TripoTaskPayload };
 export async function createTripoTextTask(
   prompt: string,
   poly: 'low' | 'medium' | 'high',
-  engine: 'pixora' | 'meshy' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'pixora'
+  engine: 'pixora' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'pixora'
 ) {
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');
@@ -27,7 +27,7 @@ export async function createTripoTextTask(
 export async function createTripoImageTask(
   imageDataUrl: string,
   poly: 'low' | 'medium' | 'high',
-  engine: 'pixora' | 'meshy' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'auto'
+  engine: 'pixora' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' = 'auto'
 ) {
   const token = useAppStore.getState().user?.token;
   if (!token) throw new Error('You must be signed in to generate models.');

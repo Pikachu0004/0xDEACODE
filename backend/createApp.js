@@ -55,8 +55,8 @@ function createApp() {
     res.json({
       status: 'OK',
       message: 'Pixora 3D Backend is running',
-      version: '1.7.0-meshy-image-to-3d',
-      supportedEngines: ['pixora', 'meshy', 'auto', 'sketchfab', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'],
+      version: '1.8.0-pixora-clean',
+      supportedEngines: ['pixora', 'auto', 'sketchfab', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'],
       timestamp: new Date().toISOString(),
     });
   });

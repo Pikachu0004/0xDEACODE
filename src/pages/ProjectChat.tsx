@@ -138,7 +138,6 @@ export default function ProjectChat() {
 
   const providers = [
     { name: 'Pixora AI (Recommended)', icon: Sparkles, desc: 'Primary smart 3D engine with high-fidelity library' },
-    { name: 'Meshy 3D (Free Credits)', icon: Sparkles, desc: 'High-quality PBR Image-to-3D using free Meshy credits' },
     { name: 'Auto (Best Free Engine)', icon: Cpu, desc: 'Tries Pixora AI / fast low-quota engines with auto-fallback' },
     { name: 'WaveSpeed AI', icon: Zap, desc: 'Ultra-fast 3D generation via WaveSpeed API' },
     { name: 'TRELLIS (Free · Fast)', icon: Box, desc: 'Microsoft Research SOTA (10-15s, light on quota)' },
@@ -149,9 +148,8 @@ export default function ProjectChat() {
     { name: 'SAM 3D', icon: Bot, desc: 'Segment Anything for 3D' },
   ];
 
-  const getEngineKey = (provider: string): 'pixora' | 'meshy' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
+  const getEngineKey = (provider: string): 'pixora' | 'auto' | 'sketchfab' | 'wavespeed' | 'trellis' | 'hunyuan' | 'shape' | 'tripo' | null => {
     if (provider.startsWith('Pixora')) return 'pixora';
-    if (provider.startsWith('Meshy')) return 'meshy';
     if (provider.startsWith('Auto')) return 'auto';
     if (provider.toLowerCase().includes('sketchfab')) return 'pixora';
     if (provider.startsWith('WaveSpeed')) return 'wavespeed';
@@ -322,19 +320,17 @@ export default function ProjectChat() {
     const engineLabel =
       engineKey === 'pixora' || engineKey === 'sketchfab'
         ? 'Pixora AI'
-        : engineKey === 'meshy'
-          ? 'Meshy 3D'
-          : engineKey === 'auto'
-            ? 'Pixora Auto'
-            : engineKey === 'wavespeed'
-              ? 'WaveSpeed AI'
-              : engineKey === 'shape'
-                ? 'OpenAI Shap-E'
-                : engineKey === 'trellis'
-                  ? 'TRELLIS'
-                  : engineKey === 'hunyuan'
-                    ? 'Hunyuan3D'
-                    : 'Tripo';
+        : engineKey === 'auto'
+          ? 'Pixora Auto'
+          : engineKey === 'wavespeed'
+            ? 'WaveSpeed AI'
+            : engineKey === 'shape'
+              ? 'OpenAI Shap-E'
+              : engineKey === 'trellis'
+                ? 'TRELLIS'
+                : engineKey === 'hunyuan'
+                  ? 'Hunyuan3D'
+                  : 'Tripo';
 
     const userMessage: ChatMessage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -450,19 +446,17 @@ export default function ProjectChat() {
     const engineLabel =
       engineKey === 'pixora' || engineKey === 'sketchfab'
         ? 'Pixora AI'
-        : engineKey === 'meshy'
-          ? 'Meshy 3D'
-          : engineKey === 'auto'
-            ? 'Pixora Auto'
-            : engineKey === 'wavespeed'
-              ? 'WaveSpeed AI'
-              : engineKey === 'shape'
-                ? 'OpenAI Shap-E'
-                : engineKey === 'trellis'
-                  ? 'TRELLIS'
-                  : engineKey === 'hunyuan'
-                    ? 'Hunyuan3D'
-                    : 'Tripo';
+        : engineKey === 'auto'
+          ? 'Pixora Auto'
+          : engineKey === 'wavespeed'
+            ? 'WaveSpeed AI'
+            : engineKey === 'shape'
+              ? 'OpenAI Shap-E'
+              : engineKey === 'trellis'
+                ? 'TRELLIS'
+                : engineKey === 'hunyuan'
+                  ? 'Hunyuan3D'
+                  : 'Tripo';
 
     setIsGenerating(true);
     setMeshyProgress(0);
