@@ -20,6 +20,44 @@ const threeDaiHeaders = (apiKey) => ({
   'Content-Type': 'application/json',
 });
 
+function getAssetUrl(item) {
+  if (!item) return '';
+  if (typeof item === 'string') return item.trim();
+  return (
+    item.asset ||
+    item.asset_url ||
+    item.url ||
+    item.glb_url ||
+    item.glb ||
+    item.download_url ||
+    item.file_url ||
+    item.file ||
+    item.model_url ||
+    item.model ||
+    ''
+  ).trim();
+}
+
+function is3DModel(item) {
+  if (!item) return false;
+  const type = String(item.asset_type || item.type || '').toUpperCase();
+  if (['3D_MODEL', 'MODEL', 'MESH', 'GLB', 'GLTF', 'ARCHIVE'].includes(type)) {
+    return true;
+  }
+  const url = getAssetUrl(item).toLowerCase();
+  return url.includes('.glb') || url.includes('.gltf') || url.includes('.zip') || url.includes('.usdz');
+}
+
+function isImage(item) {
+  if (!item) return false;
+  const type = String(item.asset_type || item.type || '').toUpperCase();
+  if (['IMAGE', 'EDITED_IMAGE', 'THUMBNAIL', 'PREVIEW', 'RENDER'].includes(type)) {
+    return true;
+  }
+  const url = getAssetUrl(item).toLowerCase();
+  return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(url);
+}
+
 /**
  * Checks the user wallet balance on 3D AI Studio.
  * GET https://api.3daistudio.com/account/user/wallet/
@@ -64,7 +102,10 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
   const isDataUri = typeof imageInput === 'string' && imageInput.startsWith('data:image/');
   const payload = {
     texture: true,
+    textures: true,
     pbr: true,
+    resolution: '1024',
+    texture_size: 2048,
   };
 
   if (isDataUri) {
@@ -73,11 +114,12 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     payload.image_url = imageInput;
   }
 
-  // Model endpoints: try Tripo image-to-3d or fallback to Tencent Rapid
+  // Model endpoints: try Tripo image-to-3d or Trellis2 or Tencent Rapid / Pro
   const endpoints = [
     `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
-    `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/rapid/`,
     `${THREEDAI_API_BASE}/v1/3d-models/trellis2/generate/`,
+    `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/rapid/`,
+    `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/pro/`,
   ];
 
   let createRes;
@@ -116,7 +158,7 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     throw new Error('3D AI Studio did not return a valid task_id.');
   }
 
-  console.log(`[3D AI Studio] Task created with ID: ${studioTaskId}. Starting polling...`);
+  console.log(`[3D AI Studio] Task created with ID: ${studioTaskId} via ${usedEndpoint}. Starting polling...`);
   await updateTask({ progress: 25, status: 'RUNNING' });
 
   // Poll status endpoint: GET /v1/generation-request/{task_id}/status/
@@ -163,21 +205,59 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     throw new Error('3D AI Studio task timed out. Please try again.');
   }
 
-  // Extract model URL from results array
-  // Schema: results: [ { asset_url: "https://..." } ] or [ { url: "https://..." } ]
+  console.log(`[3D AI Studio] Task ${studioTaskId} finished:`, JSON.stringify(finishedData));
+
+  // Extract model URL and thumbnail from results
+  // 3D AI Studio schema:
+  // results: [ { asset: "https://...", asset_type: "3D_MODEL" }, { asset: "https://...", asset_type: "IMAGE" } ]
   let remoteGlbUrl = null;
   let thumbnailUrl = null;
 
-  if (Array.isArray(finishedData.results) && finishedData.results.length > 0) {
-    const first = finishedData.results[0];
-    remoteGlbUrl = typeof first === 'string' ? first : (first.asset_url || first.url || first.glb_url || first.download_url);
-    thumbnailUrl = typeof first === 'object' ? (first.thumbnail || first.preview_url || first.thumbnail_url) : undefined;
-  } else if (finishedData.asset_url || finishedData.url || finishedData.glb) {
-    remoteGlbUrl = finishedData.asset_url || finishedData.url || finishedData.glb;
+  const rawResults = Array.isArray(finishedData.results)
+    ? finishedData.results
+    : Array.isArray(finishedData.assets)
+    ? finishedData.assets
+    : Array.isArray(finishedData.data?.results)
+    ? finishedData.data.results
+    : [];
+
+  // 1. Look for explicit 3D model asset in results
+  const modelItem = rawResults.find((r) => is3DModel(r));
+  if (modelItem) {
+    remoteGlbUrl = getAssetUrl(modelItem);
+  }
+
+  // 2. Look for thumbnail / preview image in results
+  const imageItem = rawResults.find((r) => isImage(r));
+  if (imageItem) {
+    thumbnailUrl = getAssetUrl(imageItem) || (typeof imageItem === 'object' ? (imageItem.thumbnail || imageItem.preview_url) : undefined);
+  }
+
+  // 3. Fallback: take first item in rawResults that isn't strictly an image
+  if (!remoteGlbUrl && rawResults.length > 0) {
+    const nonImage = rawResults.find((r) => !isImage(r));
+    remoteGlbUrl = getAssetUrl(nonImage || rawResults[0]);
+  }
+
+  // 4. Fallback: check top-level keys
+  if (!remoteGlbUrl) {
+    remoteGlbUrl =
+      getAssetUrl(finishedData) ||
+      getAssetUrl(finishedData.data) ||
+      getAssetUrl(finishedData.output);
+  }
+
+  if (!thumbnailUrl) {
+    thumbnailUrl =
+      finishedData.thumbnail ||
+      finishedData.thumbnail_url ||
+      finishedData.preview_url ||
+      finishedData.rendered_image ||
+      undefined;
   }
 
   if (!remoteGlbUrl) {
-    console.error('[3D AI Studio] Raw finished response:', JSON.stringify(finishedData));
+    console.error('[3D AI Studio] Could not extract 3D asset URL from response:', JSON.stringify(finishedData));
     throw new Error('3D AI Studio task finished but no 3D asset URL was found in results.');
   }
 
@@ -185,14 +265,40 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
 
   // Download GLB locally to server to ensure 100% same-origin, fast AR loading
   const destGlbPath = path.join(UPLOAD_DIR, `${taskId}.glb`);
-  console.log(`[3D AI Studio] Downloading GLB asset from ${remoteGlbUrl}...`);
+  console.log(`[3D AI Studio] Downloading 3D asset from ${remoteGlbUrl}...`);
 
   try {
     const glbStream = await axios.get(remoteGlbUrl, {
       responseType: 'arraybuffer',
       timeout: 60000,
+      headers: {
+        'User-Agent': 'Pixora3D/1.0',
+      },
     });
-    fs.writeFileSync(destGlbPath, Buffer.from(glbStream.data));
+
+    const buffer = Buffer.from(glbStream.data);
+    // Check if downloaded buffer is a ZIP archive
+    const isZip = buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4B && buffer[2] === 0x03 && buffer[3] === 0x04;
+    if (isZip) {
+      try {
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(buffer);
+        const entries = zip.getEntries();
+        const glbEntry = entries.find((e) => e.entryName.toLowerCase().endsWith('.glb'));
+        if (glbEntry) {
+          fs.writeFileSync(destGlbPath, glbEntry.getData());
+          console.log(`[3D AI Studio] Extracted GLB (${glbEntry.entryName}) from archive to ${destGlbPath}`);
+        } else {
+          fs.writeFileSync(destGlbPath, buffer);
+        }
+      } catch (zipErr) {
+        console.warn(`[3D AI Studio] ZIP extraction failed (${zipErr.message}), saving raw buffer.`);
+        fs.writeFileSync(destGlbPath, buffer);
+      }
+    } else {
+      fs.writeFileSync(destGlbPath, buffer);
+      console.log(`[3D AI Studio] Saved GLB to ${destGlbPath} (${buffer.length} bytes)`);
+    }
   } catch (dlErr) {
     console.warn(`[3D AI Studio] Local caching failed (${dlErr.message}), will serve remote URL directly.`);
   }
