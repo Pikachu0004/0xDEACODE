@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { apiFetch, apiUrl, type PublicShareResponse } from '../lib/api';
 import { UniversalCameraAR } from '../components/ar/UniversalCameraAR';
+import { preloadGlbModel } from '../lib/modelCache';
 
 const ModelViewer = 'model-viewer' as any;
 
@@ -31,6 +32,9 @@ export default function ARViewer() {
   const [isCameraARActive, setIsCameraARActive] = useState(false);
   const location = useLocation();
   const { projects, user } = useAppStore();
+  const [cachedBlobUrl, setCachedBlobUrl] = useState<string | null>(null);
+  const [preloadProgress, setPreloadProgress] = useState<number>(0);
+  const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
   const [meshyBlobUrl, setMeshyBlobUrl] = useState<string | null>(null);
   const [meshyLoadError, setMeshyLoadError] = useState<string | null>(null);
   const [meshyLoading, setMeshyLoading] = useState(false);
@@ -99,58 +103,43 @@ export default function ARViewer() {
     shareMeta?.modelUrl,
   ]);
 
-  /** Local, backend, and standard CDN URLs work directly; only Meshy needs proxy + blob. */
-  const directModelUrl = useMemo(() => {
-    if (!rawModelUrl) return null;
-    return rawModelUrl.includes('assets.meshy.ai') ? null : rawModelUrl;
-  }, [rawModelUrl]);
-
-  /** Meshy `assets.meshy.ai` URLs are blocked by CORS — fetch via API and use a blob URL for `<model-viewer>`. */
+  /** Preload and cache GLB model into phone memory with real-time download progress */
   useEffect(() => {
     setMeshyLoadError(null);
-    if (!rawModelUrl || !rawModelUrl.includes('assets.meshy.ai')) {
-      setMeshyBlobUrl(null);
+    if (!rawModelUrl) {
+      setCachedBlobUrl(null);
+      setIsModelLoading(false);
       return;
     }
 
-    setMeshyLoading(true);
-    let blobUrl: string | null = null;
+    setIsModelLoading(true);
+    setPreloadProgress(5);
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ url: rawModelUrl }),
+        const blobUrl = await preloadGlbModel(rawModelUrl, (pct) => {
+          if (!cancelled) setPreloadProgress(pct);
         });
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error(t || res.statusText);
-        }
-        const blob = await res.blob();
-        if (cancelled) return;
-        blobUrl = URL.createObjectURL(blob);
-        setMeshyBlobUrl(blobUrl);
-      } catch (e) {
         if (!cancelled) {
-          console.warn('[ARViewer] Proxy failed, falling back to direct URL:', e);
-          setMeshyBlobUrl(rawModelUrl);
+          setCachedBlobUrl(blobUrl);
+          setIsModelLoading(false);
         }
-      } finally {
-        if (!cancelled) setMeshyLoading(false);
+      } catch (err: any) {
+        if (!cancelled) {
+          console.warn('[ARViewer] Preload model error:', err);
+          setCachedBlobUrl(rawModelUrl);
+          setIsModelLoading(false);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
-  }, [rawModelUrl, user?.token]);
+  }, [rawModelUrl]);
 
-  const modelUrlForViewer = directModelUrl ?? meshyBlobUrl;
+  const modelUrlForViewer = cachedBlobUrl || rawModelUrl;
 
   const title = isPublicPreview
     ? nameFromQuery || 'AR preview'
@@ -300,12 +289,30 @@ export default function ARViewer() {
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         <div className="flex-1 relative bg-gradient-to-br from-emerald-500/5 to-zinc-900/30 min-h-[50vh] lg:min-h-0">
-          {meshyLoading ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0a0a0a] z-10">
-              <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
-              <p className="text-xs text-white/50">Loading model…</p>
+          {isModelLoading && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[#0a0a0a]/85 backdrop-blur-sm pointer-events-none transition-opacity duration-300">
+              <div className="relative flex items-center justify-center">
+                <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+                {preloadProgress > 0 && preloadProgress < 100 && (
+                  <span className="absolute text-[10px] font-mono font-bold text-white/90">
+                    {preloadProgress}%
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col items-center gap-1.5 px-6 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-white/90">
+                  Loading 3D Experience…
+                </p>
+                <div className="w-48 max-w-[70vw] h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-200 rounded-full"
+                    style={{ width: `${Math.max(8, preloadProgress)}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-white/40">Optimizing geometry & textures for phone</p>
+              </div>
             </div>
-          ) : null}
+          )}
           {meshyLoadError ? (
             <div className="absolute inset-0 flex items-center justify-center p-6 bg-[#0a0a0a] z-10">
               <p className="text-sm text-red-200/90 text-center max-w-md leading-relaxed">{meshyLoadError}</p>
@@ -316,12 +323,16 @@ export default function ARViewer() {
               <ModelViewer
                 key={modelUrlForViewer}
                 src={modelUrlForViewer}
+                loading="eager"
+                reveal="auto"
+                interaction-prompt="none"
                 ar
                 ar-modes="webxr scene-viewer quick-look"
                 camera-controls
                 auto-rotate
                 shadow-intensity="1"
                 exposure="1"
+                onLoad={() => setIsModelLoading(false)}
                 style={{ width: '100%', height: '100%', minHeight: '50vh', backgroundColor: '#0a0a0a' }}
               >
                 <button

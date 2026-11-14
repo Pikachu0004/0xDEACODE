@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiUrl } from '../lib/api';
+import { preloadGlbModel } from '../lib/modelCache';
 
 const ModelViewer = 'model-viewer' as any;
 
@@ -12,18 +13,20 @@ type Props = {
 
 /**
  * High-performance 3D Model Viewer for Chat and Studio Previews.
- * Features eager loading, automatic API URL resolution for backend uploads,
- * CORS proxy fallback, and animated loading indicator (no black box).
+ * Features eager memory preloading, streaming progress indicator,
+ * CORS proxy fallback, and automatic cache retention.
  */
 export default function MeshyModelViewer({ src, token, className }: Props) {
   const [resolved, setResolved] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [progress, setProgress] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
   const viewerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setErr(null);
     setIsLoading(true);
+    setProgress(5);
 
     if (!src) {
       setResolved(null);
@@ -31,41 +34,24 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
       return;
     }
 
-    // Ensure backend upload URLs (/uploads/ar/...) resolve to the backend server origin
     let target = src.trim();
     if (target.startsWith('/uploads/') || target.startsWith('/api/')) {
       target = apiUrl(target);
     }
 
-    // Proxy for origins known to enforce strict CORS
-    const needsProxy = target.includes('assets.meshy.ai') || target.includes('3daistudio.com');
-    if (!needsProxy) {
-      setResolved(target);
-      return;
-    }
-
-    let blobUrl: string | null = null;
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ url: target }),
+        const blobUrl = await preloadGlbModel(target, (pct) => {
+          if (!cancelled) setProgress(pct);
         });
-        if (!res.ok) {
-          throw new Error('Proxy asset request failed');
+        if (!cancelled) {
+          setResolved(blobUrl);
         }
-        const blob = await res.blob();
-        if (cancelled) return;
-        blobUrl = URL.createObjectURL(blob);
-        setResolved(blobUrl);
       } catch (e) {
         if (!cancelled) {
-          console.warn('[MeshyModelViewer] Proxy failed, using direct URL:', e);
+          console.warn('[MeshyModelViewer] Preload failed, using direct URL:', e);
           setResolved(target);
         }
       }
@@ -73,7 +59,6 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
 
     return () => {
       cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
   }, [src, token]);
 
@@ -153,11 +138,19 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
   return (
     <div className={`relative w-full h-full overflow-hidden rounded-2xl ${className ?? ''}`}>
       {isLoading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/50 backdrop-blur-xs transition-opacity duration-300">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs transition-opacity duration-300">
           <Loader2 className="w-7 h-7 animate-spin text-brand-primary mb-2" />
           <span className="text-[10px] uppercase font-bold tracking-widest text-brand-primary/90">
-            Rendering 3D Model…
+            {progress > 0 && progress < 100 ? `Downloading 3D Model… ${progress}%` : 'Rendering 3D Model…'}
           </span>
+          {progress > 0 && progress < 100 && (
+            <div className="w-28 h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+              <div
+                className="h-full bg-brand-primary transition-all duration-150 rounded-full"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
         </div>
       )}
       <ModelViewer

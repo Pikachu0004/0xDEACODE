@@ -450,8 +450,9 @@ exports.streamShareModel = async (req, res) => {
       await fs.access(filePath);
       res.setHeader('Content-Type', 'model/gltf-binary');
       res.setHeader('Content-Disposition', 'inline; filename="experience.glb"');
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Accept-Ranges', 'bytes');
 
       console.info('[projects] share model served from disk', { projectId: id });
       return res.sendFile(filePath);

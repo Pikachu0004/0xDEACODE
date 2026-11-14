@@ -23,7 +23,21 @@ function createApp() {
 
   app.use(express.json({ limit: '15mb' }));
   app.use(express.urlencoded({ extended: true }));
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  app.use(
+    '/uploads',
+    express.static(path.join(__dirname, 'uploads'), {
+      maxAge: '7d',
+      immutable: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.glb')) {
+          res.setHeader('Content-Type', 'model/gltf-binary');
+          res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Accept-Ranges', 'bytes');
+        }
+      },
+    })
+  );
 
   // Fallback for uploaded assets missing from disk after container rebuilds
   app.get('/uploads/ar/:filename', async (req, res, next) => {
