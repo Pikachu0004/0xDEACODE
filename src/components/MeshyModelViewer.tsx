@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 
 const ModelViewer = 'model-viewer' as any;
@@ -11,24 +11,36 @@ type Props = {
 };
 
 /**
- * Meshy GLB URLs on assets.meshy.ai are blocked by CORS in the browser.
- * Other URLs (WaveSpeed CDN, local backend, data URLs) load directly.
+ * High-performance 3D Model Viewer for Chat and Studio Previews.
+ * Features eager loading, automatic API URL resolution for backend uploads,
+ * CORS proxy fallback, and animated loading indicator (no black box).
  */
 export default function MeshyModelViewer({ src, token, className }: Props) {
   const [resolved, setResolved] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [err, setErr] = useState<string | null>(null);
+  const viewerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setErr(null);
+    setIsLoading(true);
+
     if (!src) {
       setResolved(null);
+      setIsLoading(false);
       return;
     }
 
-    // Only assets.meshy.ai is known to block browser CORS
-    const needsProxy = src.includes('assets.meshy.ai');
+    // Ensure backend upload URLs (/uploads/ar/...) resolve to the backend server origin
+    let target = src.trim();
+    if (target.startsWith('/uploads/') || target.startsWith('/api/')) {
+      target = apiUrl(target);
+    }
+
+    // Proxy for origins known to enforce strict CORS
+    const needsProxy = target.includes('assets.meshy.ai') || target.includes('3daistudio.com');
     if (!needsProxy) {
-      setResolved(src);
+      setResolved(target);
       return;
     }
 
@@ -42,16 +54,10 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ url: src }),
+          body: JSON.stringify({ url: target }),
         });
         if (!res.ok) {
-          const t = await res.text();
-          if (res.status === 405) {
-            throw new Error(
-              'Model proxy got 405 — set VITE_API_URL to your backend URL.'
-            );
-          }
-          throw new Error(t || res.statusText);
+          throw new Error('Proxy asset request failed');
         }
         const blob = await res.blob();
         if (cancelled) return;
@@ -59,8 +65,8 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
         setResolved(blobUrl);
       } catch (e) {
         if (!cancelled) {
-          console.warn('[MeshyModelViewer] Proxy failed, falling back to direct URL:', e);
-          setResolved(src);
+          console.warn('[MeshyModelViewer] Proxy failed, using direct URL:', e);
+          setResolved(target);
         }
       }
     })();
@@ -71,40 +77,100 @@ export default function MeshyModelViewer({ src, token, className }: Props) {
     };
   }, [src, token]);
 
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const handleLoad = () => {
+      setIsLoading(false);
+    };
+
+    const handleError = async (event: any) => {
+      console.warn('[ModelViewer] Asset render failed on direct URL:', resolved, event);
+      if (resolved && !resolved.startsWith('blob:') && !resolved.includes('proxy-asset')) {
+        // Try proxying once before giving up
+        try {
+          const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: resolved }),
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            const proxiedUrl = URL.createObjectURL(blob);
+            setResolved(proxiedUrl);
+            return;
+          }
+        } catch (_) {}
+      }
+      setIsLoading(false);
+      setErr('Unable to render 3D model.');
+    };
+
+    viewer.addEventListener('load', handleLoad);
+    viewer.addEventListener('error', handleError);
+
+    return () => {
+      viewer.removeEventListener('load', handleLoad);
+      viewer.removeEventListener('error', handleError);
+    };
+  }, [resolved]);
+
   if (err) {
     return (
       <div
-        className={`flex flex-col items-center justify-center gap-2 text-center text-xs text-white/70 p-6 bg-white/5 rounded-2xl ${className ?? ''}`}
+        className={`flex flex-col items-center justify-center gap-2 text-center text-xs text-white/70 p-6 bg-white/5 rounded-2xl border border-white/10 ${className ?? ''}`}
       >
         <AlertCircle className="w-6 h-6 text-brand-primary/80 mb-1" />
         <p className="font-semibold text-white/90">3D Preview Unavailable</p>
         <p className="text-white/50 text-[11px] max-w-[280px]">
-          The asset could not be loaded or expired during server maintenance. Generate a new prompt to view in 3D.
+          The 3D model could not be loaded into WebGL. Click below to retry or view in AR Studio.
         </p>
+        <button
+          type="button"
+          onClick={() => {
+            setErr(null);
+            setIsLoading(true);
+            setResolved(src.startsWith('/') ? apiUrl(src) : src);
+          }}
+          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-[11px] font-medium transition-all"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Retry Preview
+        </button>
       </div>
     );
   }
 
   if (!resolved) {
     return (
-      <div className={`flex items-center justify-center aspect-square bg-black/30 ${className ?? ''}`}>
-        <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+      <div className={`relative flex flex-col items-center justify-center aspect-square bg-black/40 rounded-2xl border border-white/5 ${className ?? ''}`}>
+        <Loader2 className="w-8 h-8 animate-spin text-brand-primary mb-2" />
+        <span className="text-[11px] font-mono text-white/50">Resolving 3D asset…</span>
       </div>
     );
   }
 
   return (
-    <ModelViewer
-      src={resolved}
-      camera-controls
-      auto-rotate
-      shadow-intensity="1"
-      style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }}
-      className={className}
-      onError={() => {
-        console.warn('[ModelViewer] Failed to load 3D asset:', resolved);
-        setErr('Unable to load 3D model.');
-      }}
-    />
+    <div className={`relative w-full h-full overflow-hidden rounded-2xl ${className ?? ''}`}>
+      {isLoading && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/50 backdrop-blur-xs transition-opacity duration-300">
+          <Loader2 className="w-7 h-7 animate-spin text-brand-primary mb-2" />
+          <span className="text-[10px] uppercase font-bold tracking-widest text-brand-primary/90">
+            Rendering 3D Model…
+          </span>
+        </div>
+      )}
+      <ModelViewer
+        ref={viewerRef}
+        src={resolved}
+        loading="eager"
+        reveal="auto"
+        camera-controls
+        auto-rotate
+        rotation-per-second="25deg"
+        shadow-intensity="1"
+        style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }}
+      />
+    </div>
   );
 }

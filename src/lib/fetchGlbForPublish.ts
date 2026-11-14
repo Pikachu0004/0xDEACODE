@@ -28,6 +28,14 @@ export function glbArrayBufferToDataUrl(buffer: ArrayBuffer): string {
   return `data:model/gltf-binary;base64,${btoa(binary)}`;
 }
 
+const GLB_MAGIC = 0x46546c67; // 'glTF' in little-endian
+
+function isGlbBuffer(buf: ArrayBuffer): boolean {
+  if (buf.byteLength < 20) return false;
+  const view = new DataView(buf);
+  return view.getUint32(0, true) === GLB_MAGIC;
+}
+
 /**
  * Resolve a project / chat message GLB into binary for `POST /api/projects/:id/ar-glb`.
  */
@@ -39,17 +47,37 @@ export async function fetchGlbArrayBufferForPublish(params: {
 }): Promise<ArrayBuffer> {
   const { modelUrl, modelUrls, modelDataUrl, token } = params;
   if (modelDataUrl?.startsWith('data:')) {
-    return dataUrlToArrayBuffer(modelDataUrl);
+    const buf = dataUrlToArrayBuffer(modelDataUrl);
+    if (isGlbBuffer(buf)) return buf;
   }
-  const url = modelUrls?.glb || modelUrl;
+  let url = modelUrls?.glb || modelUrl;
   if (!url) throw new Error('No GLB to publish');
-  if (url.startsWith('data:')) return dataUrlToArrayBuffer(url);
+  if (url.startsWith('data:')) {
+    const buf = dataUrlToArrayBuffer(url);
+    if (isGlbBuffer(buf)) return buf;
+    throw new Error('Provided data URL is not a valid GLB 3D model.');
+  }
   if (url.startsWith('blob:')) {
     throw new Error(
       'This model uses a temporary browser link — open AR Studio, export, and publish, or regenerate the model.'
     );
   }
-  if (url.includes('assets.meshy.ai')) {
+
+  // Ensure relative backend paths (/uploads/ar/..., /api/...) resolve to backend API origin
+  if (url.startsWith('/uploads/') || url.startsWith('/api/')) {
+    url = apiUrl(url);
+  }
+
+  if (url.includes('assets.meshy.ai') || url.includes('3daistudio.com') || EXTERNAL_CDN.test(url)) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        if (isGlbBuffer(buf)) return buf;
+      }
+    } catch (_) {}
+
+    // Fall back to proxy asset on backend
     const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
       method: 'POST',
       headers: {
@@ -57,19 +85,20 @@ export async function fetchGlbArrayBufferForPublish(params: {
       },
       body: JSON.stringify({ url }),
     });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(t || 'Could not fetch model for publish');
+    if (res.ok) {
+      const buf = await res.arrayBuffer();
+      if (isGlbBuffer(buf)) return buf;
     }
-    return res.arrayBuffer();
   }
 
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Could not download model (${res.status})`);
-    return await res.arrayBuffer();
-  } catch (directErr) {
-    // If direct fetch fails (e.g. CORS), attempt proxy fallback
+    const buf = await res.arrayBuffer();
+    if (isGlbBuffer(buf)) return buf;
+    throw new Error('Downloaded asset is not a valid binary GLB model.');
+  } catch (directErr: any) {
+    // If direct fetch fails (e.g. CORS or relative host mismatch), attempt proxy fallback
     try {
       const res = await fetch(apiUrl('/api/tripo/proxy-asset'), {
         method: 'POST',
@@ -79,9 +108,10 @@ export async function fetchGlbArrayBufferForPublish(params: {
         body: JSON.stringify({ url }),
       });
       if (res.ok) {
-        return await res.arrayBuffer();
+        const buf = await res.arrayBuffer();
+        if (isGlbBuffer(buf)) return buf;
       }
     } catch (_) {}
-    throw directErr;
+    throw new Error(directErr?.message || 'Failed to download valid GLB for publish.');
   }
 }

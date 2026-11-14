@@ -4,6 +4,12 @@ const { UPLOAD_DIR } = require('./arGlbPaths');
 
 const PREBUILT_CATALOG = [
   {
+    keywords: ['avatar', 'kishan', 'nishad', 'human', 'person', 'face', 'portrait', 'character', 'man'],
+    filename: 'Human_Avatar_Kishan_Nishad_model.glb',
+    name: 'Human Avatar · Kishan Nishad',
+    thumbnail: '/Human_Avatar_Kishan_Nishad_img.png',
+  },
+  {
     keywords: ['duck', 'rubber duck', 'yellow duck', 'bath duck'],
     filename: 'duck.glb',
     name: 'Yellow Rubber Duck',
@@ -56,7 +62,10 @@ function tryPrebuiltFallback(prompt, taskId) {
   );
   if (!match) return null;
 
-  const publicModelPath = path.resolve(__dirname, '../../public/models', match.filename);
+  let publicModelPath = path.resolve(__dirname, '../../public/models', match.filename);
+  if (!fs.existsSync(publicModelPath)) {
+    publicModelPath = path.resolve(__dirname, '../../public', match.filename);
+  }
   if (fs.existsSync(publicModelPath)) {
     if (!fs.existsSync(UPLOAD_DIR)) {
       fs.mkdirSync(UPLOAD_DIR, { recursive: true });

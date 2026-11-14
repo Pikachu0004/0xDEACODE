@@ -99,6 +99,15 @@ export interface ThreeDaiModelOption {
 
 export const THREEDAI_SUB_MODELS: ThreeDaiModelOption[] = [
   {
+    id: 'meshy-relief',
+    name: 'Meshy Relief (New)',
+    credits: 25,
+    creditBadge: '25 credits',
+    badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    speed: '1-3 min',
+    desc: 'Photo to 3D bas-relief for 3D printing, laser engraving & CNC',
+  },
+  {
     id: 'trellis2',
     name: 'TRELLIS.2 (Budget Pick)',
     credits: 15,
@@ -106,6 +115,15 @@ export const THREEDAI_SUB_MODELS: ThreeDaiModelOption[] = [
     badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     speed: '4-8 min',
     desc: 'Lowest price budget pick · Thin & open shapes with PBR',
+  },
+  {
+    id: 'meshy-game',
+    name: 'Meshy Game-Ready',
+    credits: 20,
+    creditBadge: '20 credits',
+    badgeColor: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+    speed: '5-10 min',
+    desc: 'Game-ready quad low-poly with clean topology up to 15k polys',
   },
   {
     id: 'hunyuan-rapid',
@@ -117,8 +135,17 @@ export const THREEDAI_SUB_MODELS: ThreeDaiModelOption[] = [
     desc: 'Fast production geometry with optional PBR textures',
   },
   {
+    id: 'prism31',
+    name: 'Prism 3.1 (Recommended)',
+    credits: 35,
+    creditBadge: '35 credits',
+    badgeColor: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+    speed: '3-5 min',
+    desc: 'Best overall · Strongest textures and geometry with PBR',
+  },
+  {
     id: 'hunyuan-pro',
-    name: 'Tencent Hunyuan Pro',
+    name: 'Tencent Hunyuan 3.1 Pro',
     credits: 40,
     creditBadge: '40 credits',
     badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -146,10 +173,10 @@ export const THREEDAI_SUB_MODELS: ThreeDaiModelOption[] = [
   {
     id: 'hitem3d',
     name: 'Hitem3D 3.0',
-    credits: 125,
-    creditBadge: '125 credits',
+    credits: 115,
+    creditBadge: '115 credits',
     badgeColor: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-    speed: '5-15 min',
+    speed: '2-20 min',
     desc: 'Watertight ultra-high mesh up to 5M faces',
   },
 ];
@@ -198,7 +225,7 @@ export default function ProjectChat() {
     modelUrls?: ChatMessage['modelUrls'];
   } | null>(null);
 
-  const [threeDaiSubModel, setThreeDaiSubModel] = useState<string>('trellis2');
+  const [threeDaiSubModel, setThreeDaiSubModel] = useState<string>('meshy-relief');
   const [isThreeDaiExpanded, setIsThreeDaiExpanded] = useState<boolean>(false);
 
   const activeThreeDaiSub = THREEDAI_SUB_MODELS.find((m) => m.id === threeDaiSubModel) || THREEDAI_SUB_MODELS[0];
@@ -311,6 +338,46 @@ export default function ProjectChat() {
     if (!id || !user?.token || !arPublishSource) return;
     setArPublishBusy(true);
     try {
+      // 1. FAST PUBLISH (< 200ms) on backend server directly
+      try {
+        const fastRes = await fetch(apiUrl(`/api/projects/${id}/publish-fast`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({
+            tripoTaskId: project.tripoTaskId,
+            modelUrl: arPublishSource.modelUrl || project.modelUrl,
+            arPageTitle: opts.arPageTitle,
+            arPageTagline: opts.arPageTagline,
+            arCtaLabel: opts.arCtaLabel,
+            arAccentHex: opts.arAccentHex,
+            arSharePublic: opts.arSharePublic,
+          }),
+        });
+
+        if (fastRes.ok) {
+          const fastData = await fastRes.json();
+          updateProject(id, {
+            status: 'published',
+            modelUrl: fastData.modelPath || `/api/projects/share/${id}/model.glb`,
+            arSharePublic: opts.arSharePublic,
+            arPageTitle: opts.arPageTitle,
+            arPageTagline: opts.arPageTagline,
+            arCtaLabel: opts.arCtaLabel,
+            arAccentHex: opts.arAccentHex,
+          });
+          setArPublishOpen(false);
+          setArPublishSource(null);
+          navigate(`/ar/${id}`);
+          return;
+        }
+      } catch (fastErr) {
+        console.warn('publishFast failed, falling back to buffer upload', fastErr);
+      }
+
+      // 2. Buffer fallback if server-side copy is unavailable
       const buffer = await fetchGlbArrayBufferForPublish({
         modelUrl: arPublishSource.modelUrl,
         modelUrls: arPublishSource.modelUrls ?? undefined,

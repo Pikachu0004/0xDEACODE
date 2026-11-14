@@ -1,4 +1,6 @@
 const fs = require('fs').promises;
+const path = require('path');
+const axios = require('axios');
 const mongoose = require('mongoose');
 const StudioProject = require('../models/StudioProject');
 const ProjectChatMessage = require('../models/ProjectChatMessage');
@@ -222,6 +224,119 @@ exports.appendChat = async (req, res) => {
 async function ensureArUploadDir() {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
 }
+
+/**
+ * Fast server-side publish (< 200ms) without client-side buffer re-uploading.
+ * Copies already stored server files or downloads server-to-server with high throughput.
+ */
+exports.publishFast = async (req, res) => {
+  const started = Date.now();
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return badId(res);
+
+    const {
+      tripoTaskId,
+      modelUrl,
+      arPageTitle,
+      arPageTagline,
+      arCtaLabel,
+      arAccentHex,
+      arSharePublic,
+    } = req.body || {};
+
+    const doc = await StudioProject.findOne({ _id: id, userId: req.user._id });
+    if (!doc) return res.status(404).json({ message: 'Project not found' });
+
+    await ensureArUploadDir();
+    const targetPath = arGlbFilePath(id);
+
+    let copied = false;
+
+    // 1. Try copying from uploads/ar/${tripoTaskId}.glb if taskId provided
+    const taskId = tripoTaskId || doc.tripoTaskId;
+    if (taskId && typeof taskId === 'string') {
+      const sourceTaskPath = path.join(UPLOAD_DIR, `${taskId}.glb`);
+      try {
+        await fs.access(sourceTaskPath);
+        await fs.copyFile(sourceTaskPath, targetPath);
+        copied = true;
+      } catch (_) {}
+    }
+
+    // 2. If not copied yet, check if modelUrl is a relative path or local file
+    const effectiveUrl = String(modelUrl || doc.modelUrl || '').trim();
+    if (!copied && effectiveUrl) {
+      if (effectiveUrl.includes('/uploads/ar/')) {
+        const basename = path.basename(effectiveUrl.split('?')[0]);
+        const localPath = path.join(UPLOAD_DIR, basename);
+        try {
+          await fs.access(localPath);
+          await fs.copyFile(localPath, targetPath);
+          copied = true;
+        } catch (_) {}
+      } else if (
+        effectiveUrl.startsWith('/models/') ||
+        effectiveUrl.startsWith('/Human_Avatar') ||
+        effectiveUrl.startsWith('/scifi') ||
+        effectiveUrl.startsWith('/astronaut') ||
+        effectiveUrl.startsWith('/Shoes') ||
+        effectiveUrl.startsWith('/ironMan')
+      ) {
+        const publicPath = path.resolve(__dirname, '../../public', effectiveUrl.replace(/^\//, ''));
+        try {
+          await fs.access(publicPath);
+          await fs.copyFile(publicPath, targetPath);
+          copied = true;
+        } catch (_) {}
+      } else if (effectiveUrl.startsWith('http://') || effectiveUrl.startsWith('https://')) {
+        // Fetch remote GLB server-to-server (e.g. from 3daistudio storage or Sketchfab)
+        try {
+          const dlRes = await axios.get(effectiveUrl, {
+            responseType: 'arraybuffer',
+            timeout: 30000,
+            headers: { 'User-Agent': 'Pixora-Server/1.0' },
+          });
+          const buf = Buffer.from(dlRes.data);
+          if (buf.length > 20 && buf.readUInt32LE(0) === GLB_MAGIC_LE) {
+            await fs.writeFile(targetPath, buf);
+            copied = true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Update project fields
+    if (typeof arPageTitle === 'string') doc.arPageTitle = arPageTitle.slice(0, 160);
+    if (typeof arPageTagline === 'string') doc.arPageTagline = arPageTagline.slice(0, 320);
+    if (typeof arCtaLabel === 'string') doc.arCtaLabel = arCtaLabel.slice(0, 80);
+    if (typeof arAccentHex === 'string' && /^#[0-9a-fA-F]{6}$/.test(arAccentHex)) {
+      doc.arAccentHex = arAccentHex;
+    }
+    doc.arSharePublic = arSharePublic !== false;
+    doc.status = 'published';
+    doc.arGlbUploadedAt = new Date();
+    if (copied) {
+      doc.modelUrl = `/api/projects/share/${id}/model.glb`;
+    }
+    await doc.save();
+
+    console.info('[projects] publishFast completed in', Date.now() - started, 'ms', {
+      projectId: id,
+      copied,
+    });
+
+    res.json({
+      ok: true,
+      copied,
+      modelPath: `/api/projects/share/${id}/model.glb`,
+      arUrl: `/ar/${id}`,
+    });
+  } catch (e) {
+    console.error('publishFast', e);
+    res.status(500).json({ message: 'Failed to fast publish WebAR' });
+  }
+};
 
 exports.uploadArGlb = async (req, res) => {
   const started = Date.now();

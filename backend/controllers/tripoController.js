@@ -50,7 +50,7 @@ function mapPolyToTarget(poly) {
 exports.generate3DModel = async (req, res) => {
   const { prompt, target_polycount, poly_budget, engine: rawEngine, sub_model, subModel: altSubModel, model } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
-  const subModel = sub_model || altSubModel || model || 'trellis2';
+  const subModel = sub_model || altSubModel || model || 'meshy-relief';
   const engine = ['pixora', 'sketchfab', 'threedai', '3daistudio', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'pixora';
@@ -205,7 +205,7 @@ exports.generate3DModel = async (req, res) => {
 exports.generateFromImage = async (req, res) => {
   const { image_url, image_data_url, poly_budget, target_polycount, engine: rawEngine, sub_model, subModel: altSubModel, model } = req.body || {};
   const requestedEngine = String(rawEngine || '').toLowerCase().trim();
-  const subModel = sub_model || altSubModel || model || 'trellis2';
+  const subModel = sub_model || altSubModel || model || 'meshy-relief';
   const engine = ['threedai', '3daistudio', 'auto', 'wavespeed', 'trellis', 'hunyuan', 'shape', 'tripo'].includes(requestedEngine)
     ? requestedEngine
     : 'auto';

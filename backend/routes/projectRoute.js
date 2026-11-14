@@ -10,6 +10,7 @@ const {
   listChat,
   appendChat,
   uploadArGlb,
+  publishFast,
   getPublicShare,
   streamShareModel,
 } = require('../controllers/projectController');
@@ -27,6 +28,7 @@ router.use(protect);
 
 router.get('/', listProjects);
 router.post('/', createProject);
+router.post('/:id/publish-fast', express.json(), publishFast);
 router.post('/:id/ar-glb', glbBodyParser, uploadArGlb);
 router.get('/:id/chat', listChat);
 router.post('/:id/chat', appendChat);

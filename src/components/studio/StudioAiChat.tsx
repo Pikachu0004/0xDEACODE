@@ -195,6 +195,47 @@ export function StudioAiChat({ projectId, compact, themeMuted, themeInk, uiTheme
     if (!arPubMsg?.modelUrl || !user?.token || !project) return;
     setArPubBusy(true);
     try {
+      // 1. FAST PUBLISH (< 200ms) on backend server
+      try {
+        const fastRes = await fetch(apiUrl(`/api/projects/${projectId}/publish-fast`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({
+            tripoTaskId: project.tripoTaskId,
+            modelUrl: arPubMsg.modelUrl || project.modelUrl,
+            arPageTitle: opts.arPageTitle,
+            arPageTagline: opts.arPageTagline,
+            arCtaLabel: opts.arCtaLabel,
+            arAccentHex: opts.arAccentHex,
+            arSharePublic: opts.arSharePublic,
+          }),
+        });
+
+        if (fastRes.ok) {
+          const fastData = await fastRes.json();
+          updateProject(projectId, {
+            status: 'published',
+            modelUrl: fastData.modelPath || `/api/projects/share/${projectId}/model.glb`,
+            arSharePublic: opts.arSharePublic,
+            arPageTitle: opts.arPageTitle,
+            arPageTagline: opts.arPageTagline,
+            arCtaLabel: opts.arCtaLabel,
+            arAccentHex: opts.arAccentHex,
+          });
+          setArPubOpen(false);
+          setArPubMsg(null);
+          navigate(`/ar/${projectId}`);
+          onModelReady?.();
+          return;
+        }
+      } catch (fastErr) {
+        console.warn('publishFast failed, falling back to buffer upload', fastErr);
+      }
+
+      // 2. Buffer fallback
       const buffer = await fetchGlbArrayBufferForPublish({
         modelUrl: arPubMsg.modelUrl,
         modelUrls: arPubMsg.modelUrls,

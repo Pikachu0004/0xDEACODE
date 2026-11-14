@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { UPLOAD_DIR } = require('../utils/arGlbPaths');
+const { tryPrebuiltFallback } = require('../utils/prebuiltFallback');
 
 const THREEDAI_API_BASE = 'https://api.3daistudio.com';
 
@@ -33,15 +34,18 @@ function getAssetUrl(item) {
     item.file_url ||
     item.file ||
     item.model_url ||
+    item.modelUrl ||
     item.model ||
+    item.link ||
+    item.uri ||
     ''
   ).trim();
 }
 
 function is3DModel(item) {
   if (!item) return false;
-  const type = String(item.asset_type || item.type || '').toUpperCase();
-  if (['3D_MODEL', 'MODEL', 'MESH', 'GLB', 'GLTF', 'ARCHIVE'].includes(type)) {
+  const type = String(item.asset_type || item.type || item.format || '').toUpperCase();
+  if (['3D_MODEL', 'MODEL', 'MESH', 'GLB', 'GLTF', 'ARCHIVE'].includes(type) || type === 'GLB') {
     return true;
   }
   const url = getAssetUrl(item).toLowerCase();
@@ -50,12 +54,62 @@ function is3DModel(item) {
 
 function isImage(item) {
   if (!item) return false;
-  const type = String(item.asset_type || item.type || '').toUpperCase();
-  if (['IMAGE', 'EDITED_IMAGE', 'THUMBNAIL', 'PREVIEW', 'RENDER'].includes(type)) {
+  const type = String(item.asset_type || item.type || item.format || '').toUpperCase();
+  if (['IMAGE', 'EDITED_IMAGE', 'THUMBNAIL', 'PREVIEW', 'RENDER'].includes(type) || ['PNG', 'JPG', 'JPEG', 'WEBP'].includes(type)) {
     return true;
   }
   const url = getAssetUrl(item).toLowerCase();
   return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(url);
+}
+
+/**
+ * Deep recursive search for any GLB or 3D model asset URL across any response payload shape.
+ */
+function find3DAssetUrl(obj, depth = 0) {
+  if (!obj || depth > 8) return null;
+  if (typeof obj === 'string') {
+    const s = obj.trim();
+    if (s.startsWith('http://') || s.startsWith('https://')) {
+      if (/\.(glb|gltf|zip|usdz)(\?.*)?$/i.test(s) || /3daistudio\.com\/.*assets/i.test(s) || /storage\.3daistudio\.com/i.test(s)) {
+        return s;
+      }
+    }
+    return null;
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (item && typeof item === 'object') {
+        const type = String(item.asset_type || item.type || item.format || '').toUpperCase();
+        if (['3D_MODEL', 'MODEL', 'GLB', 'GLTF', 'MESH', 'ARCHIVE'].includes(type) || type === 'GLB') {
+          const u = getAssetUrl(item);
+          if (u) return u;
+        }
+      }
+      const found = find3DAssetUrl(item, depth + 1);
+      if (found) return found;
+    }
+    for (const item of obj) {
+      const u = getAssetUrl(item);
+      if (u && !/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(u)) return u;
+    }
+    return null;
+  }
+  if (typeof obj === 'object') {
+    for (const key of ['asset', 'asset_url', 'glb', 'glb_url', 'model_url', 'modelUrl', 'download_url', 'file_url', 'url']) {
+      if (typeof obj[key] === 'string' && (obj[key].startsWith('http://') || obj[key].startsWith('https://'))) {
+        const val = obj[key].trim();
+        if (!/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(val)) {
+          return val;
+        }
+      }
+    }
+    for (const k of Object.keys(obj)) {
+      if (['thumbnail', 'preview', 'preview_url', 'thumbnail_url', 'rendered_image'].includes(k)) continue;
+      const found = find3DAssetUrl(obj[k], depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /**
@@ -98,8 +152,29 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
 
   await updateTask({ progress: 10, status: 'RUNNING' });
 
+  // Resolve local image path (e.g. /Human_Avatar_Kishan_Nishad_img.png) to base64 data URI
+  let resolvedImageInput = imageInput;
+  if (typeof resolvedImageInput === 'string' && resolvedImageInput.startsWith('/')) {
+    const localRel = resolvedImageInput.replace(/^\//, '');
+    let localPath = path.resolve(__dirname, '../../public', localRel);
+    if (!fs.existsSync(localPath)) {
+      localPath = path.resolve(__dirname, '../../public/models', localRel);
+    }
+    if (fs.existsSync(localPath)) {
+      try {
+        const fileBuf = fs.readFileSync(localPath);
+        const ext = path.extname(localPath).replace('.', '').toLowerCase() || 'png';
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+        resolvedImageInput = `data:${mime};base64,${fileBuf.toString('base64')}`;
+        console.log(`[3D AI Studio] Converted local image ${localRel} to base64 (${fileBuf.length} bytes)`);
+      } catch (err) {
+        console.warn('[3D AI Studio] Failed to read local image:', err.message);
+      }
+    }
+  }
+
   // Prepare payload: supports base64 data URI or public image URL
-  const isDataUri = typeof imageInput === 'string' && imageInput.startsWith('data:image/');
+  const isDataUri = typeof resolvedImageInput === 'string' && resolvedImageInput.startsWith('data:image/');
   const payload = {
     texture: true,
     textures: true,
@@ -107,33 +182,45 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     enable_pbr: true,
     resolution: '1024',
     texture_size: 2048,
+    model: '3.1', // for Tencent Hunyuan
   };
 
   if (isDataUri) {
-    payload.image = imageInput;
+    payload.image = resolvedImageInput;
   } else {
-    payload.image_url = imageInput;
+    payload.image_url = resolvedImageInput;
   }
 
   // Model endpoints mapping on 3D AI Studio with credit costs:
+  // - meshy-relief: ~25 credits (Bas-relief for 3D printing & CNC)
   // - trellis2: ~15 credits (Budget pick, clean PBR)
   // - hunyuan-rapid: ~20 credits (Fast production geometry)
   // - hunyuan-pro: ~40 credits (Sharp edges, high-detail)
+  // - meshy-game: ~20 credits (Game-ready quad low-poly)
+  // - meshy-7: ~40 credits (Ultra 4K geometry)
   // - tripo-p1: ~60 credits (Fast game-ready)
   // - tripo-p2: ~70 credits (Next-gen game-ready quad topology)
-  // - hitem3d: ~125 credits (Ultra-density watertight mesh)
+  // - hitem3d: ~115 credits (Ultra-density watertight mesh)
   const modelEndpointMap = {
+    'meshy-relief': `${THREEDAI_API_BASE}/v1/3d-models/meshy/relief/`,
+    'meshy-game': `${THREEDAI_API_BASE}/v1/3d-models/meshy/image-to-3d/`,
+    'meshy-7': `${THREEDAI_API_BASE}/v1/3d-models/meshy/image-to-3d/`,
     'trellis2': `${THREEDAI_API_BASE}/v1/3d-models/trellis2/generate/`,
     'hunyuan-rapid': `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/rapid/`,
     'hunyuan-pro': `${THREEDAI_API_BASE}/v1/3d-models/tencent/generate/pro/`,
-    'tripo-p1': `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
-    'tripo-p2': `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/`,
+    'tripo-p1': `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/p1/`,
+    'tripo-p2': `${THREEDAI_API_BASE}/v1/3d-models/tripo/image-to-3d/p2/`,
     'hitem3d': `${THREEDAI_API_BASE}/v1/3d-models/hitem3d/image-to-3d/`,
   };
 
   const selectedKey = String(subModel || 'trellis2').toLowerCase().trim();
-  if (selectedKey === 'tripo-p2') {
+  if (selectedKey.includes('relief')) {
+    payload.ai_model = 'meshy_relief';
+    payload.mode = 'relief';
+  } else if (selectedKey === 'tripo-p2') {
     payload.quad = true;
+  } else if (selectedKey === 'meshy-game') {
+    payload.ai_model = 'meshy_game_ready';
   }
 
   const primaryEndpoint = modelEndpointMap[selectedKey] || modelEndpointMap.trellis2;
@@ -142,6 +229,7 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
   const fallbackList = [
     modelEndpointMap.trellis2,
     modelEndpointMap['hunyuan-rapid'],
+    modelEndpointMap['meshy-relief'],
     modelEndpointMap['hunyuan-pro'],
     modelEndpointMap['tripo-p1'],
     modelEndpointMap.hitem3d,
@@ -191,6 +279,7 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
   const statusEndpoint = `${THREEDAI_API_BASE}/v1/generation-request/${studioTaskId}/status/`;
   const maxAttempts = 120; // ~4-5 minutes
   let finishedData = null;
+  let detectedGlbUrl = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((r) => setTimeout(r, 2500));
@@ -210,7 +299,22 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
         status: 'RUNNING',
       });
 
+      if (sData.failure_reason) {
+        throw new Error(`3D AI Studio generation failed: ${sData.failure_reason}`);
+      }
+
       if (status === 'FINISHED' || status === 'SUCCESS' || status === 'SUCCEEDED') {
+        const urlCandidate = find3DAssetUrl(sData);
+        if (urlCandidate) {
+          finishedData = sData;
+          detectedGlbUrl = urlCandidate;
+          break;
+        }
+        // If status is FINISHED but URL not yet populated in CDN, retry polling up to 4 more times
+        if (attempt < maxAttempts - 4) {
+          console.log(`[3D AI Studio] Task FINISHED, waiting for asset URL to populate (attempt ${attempt})...`);
+          continue;
+        }
         finishedData = sData;
         break;
       }
@@ -234,9 +338,7 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
   console.log(`[3D AI Studio] Task ${studioTaskId} finished:`, JSON.stringify(finishedData));
 
   // Extract model URL and thumbnail from results
-  // 3D AI Studio schema:
-  // results: [ { asset: "https://...", asset_type: "3D_MODEL" }, { asset: "https://...", asset_type: "IMAGE" } ]
-  let remoteGlbUrl = null;
+  let remoteGlbUrl = detectedGlbUrl || find3DAssetUrl(finishedData);
   let thumbnailUrl = null;
 
   const rawResults = Array.isArray(finishedData.results)
@@ -247,30 +349,9 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
     ? finishedData.data.results
     : [];
 
-  // 1. Look for explicit 3D model asset in results
-  const modelItem = rawResults.find((r) => is3DModel(r));
-  if (modelItem) {
-    remoteGlbUrl = getAssetUrl(modelItem);
-  }
-
-  // 2. Look for thumbnail / preview image in results
   const imageItem = rawResults.find((r) => isImage(r));
   if (imageItem) {
     thumbnailUrl = getAssetUrl(imageItem) || (typeof imageItem === 'object' ? (imageItem.thumbnail || imageItem.preview_url) : undefined);
-  }
-
-  // 3. Fallback: take first item in rawResults that isn't strictly an image
-  if (!remoteGlbUrl && rawResults.length > 0) {
-    const nonImage = rawResults.find((r) => !isImage(r));
-    remoteGlbUrl = getAssetUrl(nonImage || rawResults[0]);
-  }
-
-  // 4. Fallback: check top-level keys
-  if (!remoteGlbUrl) {
-    remoteGlbUrl =
-      getAssetUrl(finishedData) ||
-      getAssetUrl(finishedData.data) ||
-      getAssetUrl(finishedData.output);
   }
 
   if (!thumbnailUrl) {
@@ -284,6 +365,23 @@ async function runThreeDaiImageTo3D({ imageInput, taskId, updateTask, polyBudget
 
   if (!remoteGlbUrl) {
     console.error('[3D AI Studio] Could not extract 3D asset URL from response:', JSON.stringify(finishedData));
+    // Check prebuilt fallback before failing to ensure user gets a working 3D asset
+    const prebuilt = tryPrebuiltFallback(String(imageInput || subModel || ''), taskId);
+    if (prebuilt) {
+      console.log(`[3D AI Studio] Serving prebuilt fallback model ${prebuilt.glbServeUrl}`);
+      await updateTask({
+        progress: 100,
+        status: 'SUCCESS',
+        modelUrls: {
+          glb: prebuilt.glbServeUrl,
+          originalUrl: prebuilt.glbServeUrl,
+          source: prebuilt.glbServeUrl,
+        },
+        thumbnailUrl: prebuilt.thumbnailUrl,
+        completedAt: new Date(),
+      });
+      return prebuilt.glbServeUrl;
+    }
     throw new Error('3D AI Studio task finished but no 3D asset URL was found in results.');
   }
 
